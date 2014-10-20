@@ -1,0 +1,26 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 2012
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "face-io-seg-windows", "face-io-seg-windows\face-io-seg-windows.vcxproj", "{4CC239B9-357E-43F4-AAED-1A30AE6EFFBB}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "face-io-lib", "..\face-io-lib\face-io-lib\face-io-lib.vcxproj", "{6A977CA5-5BB7-49F2-A054-C5409C4B53F5}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Win32 = Debug|Win32
+		Release|Win32 = Release|Win32
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{4CC239B9-357E-43F4-AAED-1A30AE6EFFBB}.Debug|Win32.ActiveCfg = Debug|Win32
+		{4CC239B9-357E-43F4-AAED-1A30AE6EFFBB}.Debug|Win32.Build.0 = Debug|Win32
+		{4CC239B9-357E-43F4-AAED-1A30AE6EFFBB}.Release|Win32.ActiveCfg = Release|Win32
+		{4CC239B9-357E-43F4-AAED-1A30AE6EFFBB}.Release|Win32.Build.0 = Release|Win32
+		{6A977CA5-5BB7-49F2-A054-C5409C4B53F5}.Debug|Win32.ActiveCfg = Debug|Win32
+		{6A977CA5-5BB7-49F2-A054-C5409C4B53F5}.Debug|Win32.Build.0 = Debug|Win32
+		{6A977CA5-5BB7-49F2-A054-C5409C4B53F5}.Release|Win32.ActiveCfg = Release|Win32
+		{6A977CA5-5BB7-49F2-A054-C5409C4B53F5}.Release|Win32.Build.0 = Release|Win32
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal

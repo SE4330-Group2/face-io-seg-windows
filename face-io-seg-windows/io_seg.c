@@ -1,3 +1,11 @@
+#include "config_parser.h"
+#include "face_common.h"
+#include "face_ios.h"
+#include "face_messages.h"
+#include "globals.h"
+
+
+
 static FACE_CONFIG_DATA_TYPE  configData[MAX_conectionData];
 
 // Number of Configured conectionData
