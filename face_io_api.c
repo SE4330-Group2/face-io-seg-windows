@@ -6,7 +6,7 @@ FACE_IO_Initialize specifies whether this module lives
 in the same program as the I/O Seg or in the PSS Seg.
   0 = The API is on the PSS side
   1 = The API is on the I/O Seg Side
-If the I/O Seg and the PSS are in the same program, pass a 1.
+  2 = I/O Seg and PSS are in the same program, Init was called by PSS
 The rest of configFileName is a file name.
 The header file associated with this C file is the FACE standard file ios.h
 **********************************************************************************/
@@ -40,6 +40,10 @@ The header file associated with this C file is the FACE standard file ios.h
    #pragma comment(lib,"Ws2_32.lib")  // Yes, it's just that easy to get posix sockets in Windows!
 #endif
 
+// For when PSS and I/O Seg are in the same program and I/O Lib calls I/O Lib 
+extern void IO_Seg_Initialize
+     ( /* in */ const FACE_CONGIGURATION_FILE_NAME configuration_file,
+       /* out */ FACE_RETURN_CODE_TYPE *return_code);
 
 // For Direct Read when PSS and I/O Seg are in the same program
 extern void IO_Seg_Read
@@ -68,9 +72,8 @@ typedef struct
 #define MAX_conectionData 10
 
 // Parallel arrays to manage the connection
-FACE_CONFIG_DATA_TYPE  configData[MAX_conectionData];
-CONECTION_DATA_TYPE conectionData[MAX_conectionData];
-
+static FACE_CONFIG_DATA_TYPE  configData[MAX_conectionData];
+static CONECTION_DATA_TYPE conectionData[MAX_conectionData];
 
 
 // Specifies whether this API is on the IO Segment side or not
@@ -100,7 +103,7 @@ static _Bool CreateSockets(void);
 // must be a digit where:
 //     0 = The API is on the PSS side
 //     1 = The API is on the I/O Seg Side
-// If PSS and I/O Seg are in the same perogram, pass 1.
+//     2 = I/O Seg and PSS are in the same program, Init was called by PSS
 // The rest is a file name, full path or relative to execution directory.
 void FACE_IO_Initialize
    ( /* in */ const FACE_CONGIGURATION_FILE_NAME configuration_file,
@@ -109,19 +112,34 @@ void FACE_IO_Initialize
    uint32_t i;
    _Bool success;
 
-   isItIOSeg = configuration_file[0] - '0';
+   if ( configuration_file[0] != '0' && configuration_file[0] != '1' && configuration_file[0] != '2')
+   {
+      *return_code = FACE_INVALID_PARAM;
+      return;
+   }
+
+   isItIOSeg = configuration_file[0] != '0';   // Assume yes except for '0'
 
    numconectionData = MAX_conectionData;
    success = PasrseConfigFile(configuration_file + 1, configData, &numconectionData);
 
    for (i = 0; i < numconectionData; i++)
    {
-      conectionData[i].handle = 0;    // Initialize to usued
+      conectionData[i].handle = 0;    // Initialize to unused
    }
 
    if(success)
    {
+      if (configuration_file[0] == '2')
+      {
+         IO_Seg_Initialize (configuration_file, return_code);
+         if (*return_code != FACE_NO_ERROR)
+         {
+            return;
+         }
+      }
       CreateSockets();                // Not sure what to do if this fails - no FACE_RETURN_CODE_TYPE seems appropriate
+
       *return_code = FACE_NO_ERROR;
    }
    else
@@ -476,6 +494,17 @@ int main()
 
 
 // Implement test bodies for the I/O Direct Function calls
+
+//
+
+void IO_Seg_Initialize
+     ( /* in */ const FACE_CONGIGURATION_FILE_NAME configuration_file,
+       /* out */ FACE_RETURN_CODE_TYPE *return_code)
+{
+   // Needs to be written by IO Seg.  Will parse the file 
+   *return_code = FACE_NO_ERROR;
+}
+
 
 void IO_Seg_Read
    ( /* inout */ FACE_MESSAGE_LENGTH_TYPE *message_length,
