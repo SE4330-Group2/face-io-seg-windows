@@ -3,10 +3,13 @@
 #include "face_ios.h"
 #include "face_messages.h"
 #include "globals.h"
+#include <string.h>
+#include <stdlib.h>
+#include <stdio.h>
 
+#define MAX_CONNECTION_DATA 10
 
-
-static FACE_CONFIG_DATA_TYPE  configData[MAX_conectionData];
+static FACE_CONFIG_DATA_TYPE  configData[MAX_CONNECTION_DATA];
 
 // Number of Configured conectionData
 static uint32_t numconectionData = 0;
@@ -15,12 +18,12 @@ void IO_Seg_Initialize
      ( /* in */ const FACE_CONGIGURATION_FILE_NAME configuration_file,
        /* out */ FACE_RETURN_CODE_TYPE *return_code)
 {
-   success = PasrseConfigFile(configuration_file + 1, configData, &numconectionData);
+   _Bool success = PasrseConfigFile(configuration_file + 1, configData, &numconectionData);
 
    
-   if(success == true)
+   if(success)
    {
-   
+
       *return_code = FACE_NO_ERROR;
    }
    else
