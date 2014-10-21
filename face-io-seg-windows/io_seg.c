@@ -7,11 +7,14 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include "utildefs.h"
-#include <Windows.h>
 
+#define IO_SEG_TESTING
+#ifdef IO_SEG_TESTING
+   #include <Windows.h>
+#endif
 
-   #include <winsock2.h>
-   #pragma comment(lib,"Ws2_32.lib")  // Yes, it's just that easy to get posix sockets in Windows!
+#include <winsock2.h>
+#pragma comment(lib,"Ws2_32.lib")  // Yes, it's just that easy to get posix sockets in Windows!
 
 
 #define MAX_CONNECTION_DATA 10
@@ -154,101 +157,14 @@ void IO_Seg_Write
    }
 }
 
+#ifdef IO_SEG_TESTING
 
+#define MAX_BUFF_SIZE  1024
 
-void TEST_DRIVER()
-{
-   printf("Starting Driver Tests\n");
-   printf("---------------------\n");
+static _Bool errorOccured = false;
 
-   printf("Driver Tests Complete\n");
-}
-
-void TEST_IO_SEG()
-{
-   FACE_RETURN_CODE_TYPE retCode = FACE_NO_ERROR;
-   FACE_MESSAGE_LENGTH_TYPE message_length;
-
-   char txBuff[1024];
-   char rxBuff[1024];
-
-   FACE_IO_MESSAGE_TYPE * txFaceMsg = (FACE_IO_MESSAGE_TYPE *)txBuff;
-   FACE_IO_MESSAGE_TYPE * rxFaceMsg = (FACE_IO_MESSAGE_TYPE *)rxBuff;
-
-   // Set the fixed fields - make sure to convert to network order when needed
-   txFaceMsg->guid = htonl(100);
-   rxFaceMsg->guid = htonl(200);   // Pick a couple of numbers
-   txFaceMsg->busType = FACE_DISCRETE;
-   rxFaceMsg->busType = FACE_DISCRETE;
-   txFaceMsg->message_type = htons(FACE_DATA);
-   rxFaceMsg->message_type = htons(FACE_DATA);
-   FaceSetPayLoadLength(txFaceMsg, 4);
-   FaceSetPayLoadLength(rxFaceMsg, 4);
-
-   printf("Starting IO Seg Tests\n");
-   printf("---------------------\n");
-
-
-   IO_Seg_Initialize("1config.xml", &retCode);
-
-   message_length = FACE_MSG_HEADER_SIZE + 4;
-   FaceSetDiscreteChannelNumber(rxFaceMsg, 1);
-   IO_Seg_Read(&message_length, rxFaceMsg, &retCode);
-
-
-   printf("IO Seg Tests Complete\n");
-}
-
-void TEST_IO_SEG_READ_INTERACTIVE()
-{
-   FACE_RETURN_CODE_TYPE retCode = FACE_NO_ERROR;
-   FACE_MESSAGE_LENGTH_TYPE message_length;
-
-   char rxBuff[1024];
-   uint8_t state, oldstate;
-
-   FACE_IO_MESSAGE_TYPE * rxFaceMsg = (FACE_IO_MESSAGE_TYPE *)rxBuff;
-
-   // Set the fixed fields - make sure to convert to network order when needed
-   rxFaceMsg->guid = htonl(200);   // Pick a couple of numbers
-   rxFaceMsg->busType = FACE_DISCRETE;
-   rxFaceMsg->message_type = htons(FACE_DATA);
-   FaceSetPayLoadLength(rxFaceMsg, 4);
-
-   printf("Starting IO Seg Read Interactive Tests\n");
-   printf("---------------------\n");
-
-
-   IO_Seg_Initialize("1config.xml", &retCode);
-
-   message_length = FACE_MSG_HEADER_SIZE + 4;
-   FaceSetDiscreteChannelNumber(rxFaceMsg, 1);
-
-   while(1)
-   {
-      IO_Seg_Read(&message_length, rxFaceMsg, &retCode);
-      oldstate = state = FaceDiscreteState(rxFaceMsg);
-
-      printf ("Read state:%d on channel:%d. Change state to continue.\n", state, FaceDiscreteChannelNumber(rxFaceMsg));
-
-      while(state == oldstate)
-      {
-         IO_Seg_Read(&message_length, rxFaceMsg, &retCode);
-         state = FaceDiscreteState(rxFaceMsg);
-      }
-      printf ("State change detected!\n");
-   }
-
-   printf("IO Seg Tests Complete\n");
-}
-
-void TEST_IO_LIB()
-{
-   printf("Starting IO Lib Tests\n");
-   printf("---------------------\n");
-
-   printf("IO Lib Tests Complete\n");
-}
+FACE_INTERFACE_HANDLE_TYPE wowHandle;
+FACE_INTERFACE_HANDLE_TYPE emergencyHandle;
 
 int TEST_IO_SEG_INIT_INVALID_FILE()
 {
@@ -393,6 +309,189 @@ int TEST_IO_SEG_WRITE_CHANNELS_PRESERVED()
    return (discrete_reg_old & ~(1<<(channel-1))) == (discrete_reg_new & ~(1<<(channel-1)));
 }
 
+
+int TEST_FACE_IO_INITIALIZE()
+{
+   FACE_RETURN_CODE_TYPE retCode = FACE_NO_ERROR;
+   FACE_IO_Initialize("2config.xml", &retCode);
+
+   return retCode == FACE_NO_ERROR;
+}
+
+int TEST_FACE_IO_OPEN()
+{
+   FACE_RETURN_CODE_TYPE retCode1, retCode2;
+
+   FACE_IO_Open("DISCRETE_INPUT_WOW", &wowHandle, &retCode1);
+   FACE_IO_Open("DISCRETE_OUTPUT_EMERGENCY", &emergencyHandle, &retCode2);
+
+   return (retCode1 == FACE_NO_ERROR) && (retCode2 == FACE_NO_ERROR);
+}
+
+int TEST_FACE_IO_WRITE_ON()
+{
+   FACE_RETURN_CODE_TYPE retCode = FACE_NO_ERROR;
+   char txBuff[MAX_BUFF_SIZE];
+
+   FACE_IO_MESSAGE_TYPE * txFaceMsg = (FACE_IO_MESSAGE_TYPE *)txBuff;
+   txFaceMsg->guid = htonl(100);
+   txFaceMsg->busType = FACE_DISCRETE;
+   txFaceMsg->message_type = htons(FACE_DATA);
+
+   FaceSetPayLoadLength(txFaceMsg, 4);
+
+   FaceSetDiscreteChannelNumber(txFaceMsg, 1);
+
+   FaceSetDiscreteState(txFaceMsg, 0);
+
+   FACE_IO_Write(emergencyHandle, 0, FACE_MSG_HEADER_SIZE + 4, txFaceMsg, &retCode);
+
+   return retCode == FACE_NO_ERROR;
+}
+
+int TEST_FACE_IO_WRITE_OFF()
+{
+   FACE_RETURN_CODE_TYPE retCode = FACE_NO_ERROR;
+   char txBuff[MAX_BUFF_SIZE];
+
+   FACE_IO_MESSAGE_TYPE * txFaceMsg = (FACE_IO_MESSAGE_TYPE *)txBuff;
+   txFaceMsg->guid = htonl(100);
+   txFaceMsg->busType = FACE_DISCRETE;
+   txFaceMsg->message_type = htons(FACE_DATA);
+
+   FaceSetPayLoadLength(txFaceMsg, 4);
+
+   FaceSetDiscreteChannelNumber(txFaceMsg, 1);
+
+   FaceSetDiscreteState(txFaceMsg, 1);
+
+   FACE_IO_Write(emergencyHandle, 0, FACE_MSG_HEADER_SIZE + 4, txFaceMsg, &retCode);
+
+   return retCode == FACE_NO_ERROR;
+}
+
+int TEST_FACE_IO_READ()
+{
+   FACE_MESSAGE_LENGTH_TYPE messLen = FACE_MSG_HEADER_SIZE + 4;
+   FACE_RETURN_CODE_TYPE retCode = FACE_NO_ERROR;
+   char rxBuff[MAX_BUFF_SIZE];
+
+   FACE_IO_MESSAGE_TYPE * rxFaceMsg = (FACE_IO_MESSAGE_TYPE *)rxBuff;
+
+   // Zero them out
+   memset(rxBuff, 0, MAX_BUFF_SIZE);
+
+   // Set the fixed fields - make sure to convert to network order when needed
+   rxFaceMsg->guid = htonl(200);   // Pick a couple of numbers
+   rxFaceMsg->busType = FACE_DISCRETE;
+   rxFaceMsg->message_type = htons(FACE_DATA);
+   FaceSetPayLoadLength(rxFaceMsg, 4);
+
+   FaceSetDiscreteChannelNumber(rxFaceMsg, 1);
+
+   FACE_IO_Read(wowHandle, 0, &messLen, rxFaceMsg, &retCode);
+
+   return retCode == FACE_NO_ERROR;
+}
+
+int TEST_FACE_IO_CLOSE()
+{
+   FACE_RETURN_CODE_TYPE retCode1, retCode2;
+
+   FACE_IO_Close(wowHandle, &retCode1);
+   FACE_IO_Close(emergencyHandle, &retCode2);
+
+   return (retCode1 == FACE_NO_ERROR) && (retCode2 == FACE_NO_ERROR);
+}
+
+
+int TEST_FACE_IO_READ_INTERACTIVE()
+{
+   FACE_RETURN_CODE_TYPE retCode = FACE_NO_ERROR;
+   FACE_MESSAGE_LENGTH_TYPE message_length;
+   char c;
+   char rxBuff[1024];
+   uint8_t state, oldstate;
+   uint8_t channel = 1;
+
+
+   FACE_IO_MESSAGE_TYPE * rxFaceMsg = (FACE_IO_MESSAGE_TYPE *)rxBuff;
+
+   // Set the fixed fields - make sure to convert to network order when needed
+   rxFaceMsg->guid = htonl(200);   // Pick a couple of numbers
+   rxFaceMsg->busType = FACE_DISCRETE;
+   rxFaceMsg->message_type = htons(FACE_DATA);
+   FaceSetPayLoadLength(rxFaceMsg, 4);
+
+   IO_Seg_Initialize("1config.xml", &retCode);
+
+   message_length = FACE_MSG_HEADER_SIZE + 4;
+   FaceSetDiscreteChannelNumber(rxFaceMsg, channel);
+
+   IO_Seg_Read(&message_length, rxFaceMsg, &retCode);
+   oldstate = state = FaceDiscreteState(rxFaceMsg);
+
+   printf ("  Read state:%d on channel:%d.\n", state, channel);
+
+   printf("  Toggle dipswitch 1 and press [ENTER] to continue.");
+   fflush( stdin );
+   c = getchar();
+
+   IO_Seg_Read(&message_length, rxFaceMsg, &retCode);
+   state = FaceDiscreteState(rxFaceMsg);
+
+   return (oldstate != state) && (retCode == FACE_NO_ERROR);
+}
+
+int TEST_FACE_IO_WRITE_INTERACTIVE()
+{
+   FACE_RETURN_CODE_TYPE retCode = FACE_NO_ERROR;
+   FACE_MESSAGE_LENGTH_TYPE message_length;
+   CEI_INT32 discrete_reg_old, discrete_reg_new;
+   uint8_t channel = 1;
+   char c;
+
+   char txBuff[1024];
+
+   FACE_IO_MESSAGE_TYPE * txFaceMsg = (FACE_IO_MESSAGE_TYPE *)txBuff;
+
+   txFaceMsg->guid = htonl(100);
+   txFaceMsg->busType = FACE_DISCRETE;
+   txFaceMsg->message_type = htons(FACE_DATA);
+   FaceSetPayLoadLength(txFaceMsg, 4);
+
+   message_length = FACE_MSG_HEADER_SIZE + 4;
+
+   discrete_reg_old = ar_get_config(board,ARU_DISCRETE_OUTPUTS);
+
+   FaceSetDiscreteChannelNumber(txFaceMsg,channel);
+   FaceSetDiscreteState(txFaceMsg, 0);
+
+   printf("  Turning on LED...\n");
+
+   IO_Seg_Write(message_length, txFaceMsg, &retCode);
+
+   printf("  Is the LED on? (y/n)\n");
+   fflush( stdin );
+   c = getchar();
+   if(c == 'n')
+      return 0;
+
+   printf("  Turning off LED...\n");
+
+   FaceSetDiscreteState(txFaceMsg, 1);
+   IO_Seg_Write(message_length, txFaceMsg, &retCode);
+   printf("  Is the LED off? (y/n)\n");
+   fflush( stdin );
+   c = getchar();
+   if(c == 'n')
+      return 0;
+
+   discrete_reg_new = ar_get_config(board,ARU_DISCRETE_OUTPUTS);
+
+   return (retCode == FACE_NO_ERROR);
+}
+
 void handle_test(char* name, int (*func)())
 {
    printf("Starting test `%s`\n", name);
@@ -400,13 +499,19 @@ void handle_test(char* name, int (*func)())
    if(func())
       printf("[Test Passed]\n\n");
    else
+   {
+      errorOccured = true;
       printf("[Test Failed]\n\n");
+   }
 }
 
 int main(int argc, char *argv[])
 {
    printf("Starting Tests\n");
    printf("==============\n\n");
+
+   printf("Unit Tests\n");
+   printf("--------------\n\n");
 
    handle_test("Init - Config file invalid", TEST_IO_SEG_INIT_INVALID_FILE);
    handle_test("Init - Config file valid", TEST_IO_SEG_INIT_GOOD);
@@ -419,7 +524,36 @@ int main(int argc, char *argv[])
    handle_test("Write - On successful", TEST_IO_SEG_WRITE_GOOD_ON);
    handle_test("Write - Off successful", TEST_IO_SEG_WRITE_GOOD_OFF);
 
+   printf("Unit Tests Complete\n\n\n");
 
-   printf("All Tests Complete\n");
+   printf("Integration Tests\n");
+   printf("-----------------\n\n");
+
+   handle_test("FACE_IO Init - Success", TEST_FACE_IO_INITIALIZE);
+   handle_test("FACE_IO Open - Success", TEST_FACE_IO_OPEN);
+   handle_test("FACE_IO Write On - Success", TEST_FACE_IO_WRITE_ON);
+   handle_test("FACE_IO Write Off - Success", TEST_FACE_IO_WRITE_OFF);
+   handle_test("FACE_IO Read - Success", TEST_FACE_IO_READ);
+   handle_test("FACE_IO Close - Success", TEST_FACE_IO_CLOSE);
+
+   printf("Integration Tests Complete\n\n\n");
+
+   printf("Interactive Tests\n");
+   printf("-----------------\n\n");
+
+   handle_test("FACE_IO Write Interactive", TEST_FACE_IO_READ_INTERACTIVE);
+
+   handle_test("FACE_IO Write Interactive", TEST_FACE_IO_WRITE_INTERACTIVE);
+
+   printf("Interactive Tests Complete\n\n\n");
+
+   if(errorOccured)
+      printf("One or more errors have occured\n");
+   else
+      printf("All tests completed successfully\n");
+
+   fflush( stdin );
    getchar();
 }
+
+#endif
