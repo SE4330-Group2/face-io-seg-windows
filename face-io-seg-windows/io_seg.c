@@ -1,3 +1,9 @@
+//---------------------------------------------------------------------------
+// Prototype 2
+// This is the c file for io_seg.h which will be used by the I/O library
+// when it needs to access hardware.
+//---------------------------------------------------------------------------
+
 #include "io_seg.h"
 #include <stdio.h>
 
@@ -8,15 +14,21 @@
 // Board configuration data
 static FACE_CONFIG_DATA_TYPE  configData[MAX_CONNECTION_DATA];
 static uint32_t numconectionData = 0;
-CEI_INT16 board;         // board device number
-CEI_INT16 num_xmtrs;     // number of transmitters purchased
-CEI_INT16 num_rcvrs;     // number of receivers purchased
+static CEI_INT16 board;         // board device number
 
+//---------------------------------------------------------------------------
+// IO_Seg_Initialize is used to initialize the hardware.
+// This method reads an XML config file and sets hardware accordingly.
+// The config file should be a file name preceded by a character which will
+// be ignored.
+//---------------------------------------------------------------------------
 void IO_Seg_Initialize
    ( /* in */ const FACE_CONGIGURATION_FILE_NAME configuration_file,
    /* out */ FACE_RETURN_CODE_TYPE *return_code)
 {
    CEI_INT16 status;        // API status value
+   CEI_INT16 num_xmtrs;     // number of transmitters purchased
+   CEI_INT16 num_rcvrs;     // number of receivers purchased
 
    printf("  In IO Seg Read.\n");
 
@@ -35,7 +47,6 @@ void IO_Seg_Initialize
          return;
       }
 
-      // display the board type
       printf("  %s detected ",ar_get_boardname(board,NULL));
 
       // display the number of receivers and transmitters
@@ -51,7 +62,15 @@ void IO_Seg_Initialize
    }
 }
 
-// For Direct Read when PSS and I/O Seg are in the same program
+
+//---------------------------------------------------------------------------
+// IO_Seg_Read is used to read the hardware.
+// This method retrieves the channel number and bus type from the location
+// specified by the data buffer address. 
+// After reading this information, this method retrieves the value from the
+// hardware and copies it to the memory location specified by the data 
+// buffer address.
+//---------------------------------------------------------------------------
 void IO_Seg_Read
    ( /* inout */ FACE_MESSAGE_LENGTH_TYPE *message_length,
    /* in */ FACE_MESSAGE_ADDR_TYPE data_buffer_address,
@@ -87,7 +106,13 @@ void IO_Seg_Read
    }
 }
 
-// For Direct Write when PSS and I/O Seg are in the same program
+//---------------------------------------------------------------------------
+// IO_Seg_Write is used to write to the hardware.
+// This method retrieves the channel number, bus type, and desired state
+// from the location specified by the data buffer address. 
+// After reading this information, this method writes the desired state 
+// to the hardware.
+//---------------------------------------------------------------------------
 void IO_Seg_Write
    (  /* in */ FACE_MESSAGE_LENGTH_TYPE message_length,
    /* in */ FACE_MESSAGE_ADDR_TYPE data_buffer_address,
@@ -110,10 +135,8 @@ void IO_Seg_Write
 
       printf("  Current discrete output values (reg = 0x%4X):\n",discrete_reg);
 
-      if(state)
-         discrete_reg |= 1 <<(channel - 1);
-      else
-         discrete_reg &= ~(1 <<(channel - 1));
+      discrete_reg = state ? discrete_reg |   1 << (channel - 1)
+                           : discrete_reg & ~(1 << (channel - 1));
 
       status = ar_set_config(board,ARU_DISCRETE_OUTPUTS,discrete_reg);
 
@@ -138,6 +161,10 @@ void IO_Seg_Write
    }
 }
 
+
+//---------------------------------------------------------------------------
+// This starts the testbed for the IO segment.
+//---------------------------------------------------------------------------
 #ifdef IO_SEG_TESTING
 
 #define MAX_BUFF_SIZE  1024
@@ -147,7 +174,8 @@ static _Bool errorOccured = false;
 FACE_INTERFACE_HANDLE_TYPE wowHandle;
 FACE_INTERFACE_HANDLE_TYPE emergencyHandle;
 
-int TEST_IO_SEG_INIT_INVALID_FILE()
+// Returns true when file doesn't exist
+_Bool TEST_IO_SEG_INIT_INVALID_FILE()
 {
    FACE_RETURN_CODE_TYPE retCode;
    printf("  ");
@@ -155,14 +183,16 @@ int TEST_IO_SEG_INIT_INVALID_FILE()
    return retCode == FACE_INVALID_CONFIG;
 }
 
-int TEST_IO_SEG_INIT_GOOD()
+// Returns true when init is successful
+_Bool TEST_IO_SEG_INIT_GOOD()
 {
    FACE_RETURN_CODE_TYPE retCode;
    IO_Seg_Initialize("1config.xml", &retCode);
    return retCode == FACE_NO_ERROR;
 }
 
-int TEST_IO_SEG_READ_GOOD()
+// Returns true when read is successful
+_Bool TEST_IO_SEG_READ_GOOD()
 {
    FACE_RETURN_CODE_TYPE retCode;
    FACE_MESSAGE_LENGTH_TYPE message_length;
@@ -182,7 +212,8 @@ int TEST_IO_SEG_READ_GOOD()
    return retCode == FACE_NO_ERROR;
 }
 
-int TEST_IO_SEG_READ_BAD_BUSTYPE()
+// Returns true when a non-implemented bus type is detected
+_Bool TEST_IO_SEG_READ_BAD_BUSTYPE()
 {
    FACE_RETURN_CODE_TYPE retCode;
    FACE_MESSAGE_LENGTH_TYPE message_length;
@@ -202,13 +233,14 @@ int TEST_IO_SEG_READ_BAD_BUSTYPE()
    return retCode == FACE_INVALID_PARAM;
 }
 
-int TEST_IO_SEG_WRITE_GOOD_ON()
+// Returns true when writing a "0" is successful
+_Bool TEST_IO_SEG_WRITE_GOOD_ON()
 {
    FACE_RETURN_CODE_TYPE retCode = FACE_NO_ERROR;
    FACE_MESSAGE_LENGTH_TYPE message_length;
    CEI_INT32 discrete_reg_old, discrete_reg_new;
    uint8_t channel = 1;
-   int state = 0;
+   uint8_t state = 0;
 
    char txBuff[1024];
 
@@ -232,13 +264,14 @@ int TEST_IO_SEG_WRITE_GOOD_ON()
    return (retCode == FACE_NO_ERROR) && (discrete_reg_new == (discrete_reg_old & ~(1<<(channel-1))));
 }
 
-int TEST_IO_SEG_WRITE_GOOD_OFF()
+// Returns true when writing a "1" is successful
+_Bool TEST_IO_SEG_WRITE_GOOD_OFF()
 {
    FACE_RETURN_CODE_TYPE retCode = FACE_NO_ERROR;
    FACE_MESSAGE_LENGTH_TYPE message_length;
    CEI_INT32 discrete_reg_old, discrete_reg_new;
    uint8_t channel = 1;
-   int state = 1;
+   uint8_t state = 1;
 
    char txBuff[1024];
 
@@ -262,8 +295,8 @@ int TEST_IO_SEG_WRITE_GOOD_OFF()
    return (retCode == FACE_NO_ERROR) && (discrete_reg_new == (discrete_reg_old | (1<<(channel-1))));
 }
 
-
-int TEST_IO_SEG_WRITE_CHANNELS_PRESERVED()
+// Returns true when the channels not written to are preserved after writing to a channel
+_Bool TEST_IO_SEG_WRITE_CHANNELS_PRESERVED()
 {
    FACE_RETURN_CODE_TYPE retCode = FACE_NO_ERROR;
    FACE_MESSAGE_LENGTH_TYPE message_length;
@@ -290,8 +323,8 @@ int TEST_IO_SEG_WRITE_CHANNELS_PRESERVED()
    return (discrete_reg_old & ~(1<<(channel-1))) == (discrete_reg_new & ~(1<<(channel-1)));
 }
 
-
-int TEST_FACE_IO_INITIALIZE()
+// Returns true when FACE_IO_Initialize is successful
+_Bool TEST_FACE_IO_INITIALIZE()
 {
    FACE_RETURN_CODE_TYPE retCode = FACE_NO_ERROR;
    FACE_IO_Initialize("2config.xml", &retCode);
@@ -299,7 +332,8 @@ int TEST_FACE_IO_INITIALIZE()
    return retCode == FACE_NO_ERROR;
 }
 
-int TEST_FACE_IO_OPEN()
+// Returns true when FACE_IO_Open is successful
+_Bool TEST_FACE_IO_OPEN()
 {
    FACE_RETURN_CODE_TYPE retCode1, retCode2;
 
@@ -309,7 +343,8 @@ int TEST_FACE_IO_OPEN()
    return (retCode1 == FACE_NO_ERROR) && (retCode2 == FACE_NO_ERROR);
 }
 
-int TEST_FACE_IO_WRITE_ON()
+// Returns true when FACE_IO_Write state "0" is successful
+_Bool TEST_FACE_IO_WRITE_ON()
 {
    FACE_RETURN_CODE_TYPE retCode = FACE_NO_ERROR;
    char txBuff[MAX_BUFF_SIZE];
@@ -330,7 +365,8 @@ int TEST_FACE_IO_WRITE_ON()
    return retCode == FACE_NO_ERROR;
 }
 
-int TEST_FACE_IO_WRITE_OFF()
+// Returns true when FACE_IO_Write state "1" is successful
+_Bool TEST_FACE_IO_WRITE_OFF()
 {
    FACE_RETURN_CODE_TYPE retCode = FACE_NO_ERROR;
    char txBuff[MAX_BUFF_SIZE];
@@ -351,7 +387,8 @@ int TEST_FACE_IO_WRITE_OFF()
    return retCode == FACE_NO_ERROR;
 }
 
-int TEST_FACE_IO_READ()
+// Returns true when FACE_IO_Read is successful
+_Bool TEST_FACE_IO_READ()
 {
    FACE_MESSAGE_LENGTH_TYPE messLen = FACE_MSG_HEADER_SIZE + 4;
    FACE_RETURN_CODE_TYPE retCode = FACE_NO_ERROR;
@@ -375,7 +412,8 @@ int TEST_FACE_IO_READ()
    return retCode == FACE_NO_ERROR;
 }
 
-int TEST_FACE_IO_CLOSE()
+// Returns true when FACE_IO_Close is successful
+_Bool TEST_FACE_IO_CLOSE()
 {
    FACE_RETURN_CODE_TYPE retCode1, retCode2;
 
@@ -385,8 +423,10 @@ int TEST_FACE_IO_CLOSE()
    return (retCode1 == FACE_NO_ERROR) && (retCode2 == FACE_NO_ERROR);
 }
 
-
-int TEST_FACE_IO_READ_INTERACTIVE()
+// This is an interactive test that will prompt the user to toggle the 
+// DIP switch before continuing.  The test is successful if the state
+// change is detected.
+_Bool TEST_FACE_IO_READ_INTERACTIVE()
 {
    FACE_RETURN_CODE_TYPE retCode = FACE_NO_ERROR;
    FACE_MESSAGE_LENGTH_TYPE message_length;
@@ -424,7 +464,10 @@ int TEST_FACE_IO_READ_INTERACTIVE()
    return (oldstate != state) && (retCode == FACE_NO_ERROR);
 }
 
-int TEST_FACE_IO_WRITE_INTERACTIVE()
+// This is an interactive test that will turn on the LED and ask the
+// user if they detect the state change.  The test is successful if 
+// the state change is detected.
+_Bool TEST_FACE_IO_WRITE_INTERACTIVE()
 {
    char c;
    _Bool success;
@@ -442,7 +485,7 @@ int TEST_FACE_IO_WRITE_INTERACTIVE()
       return 0;
 
    printf("  Turning off LED...\n");
-   
+
    success = TEST_FACE_IO_WRITE_OFF();
 
    printf("  Is the LED off? (y/n)\n");
@@ -456,7 +499,9 @@ int TEST_FACE_IO_WRITE_INTERACTIVE()
    return success;
 }
 
-void handle_test(char* name, int (*func)())
+// Displays the name of the test and a message dependent on the
+// result of the test
+void handle_test(char* name, _Bool (*func)())
 {
    printf("Starting test `%s`\n", name);
 
@@ -469,6 +514,7 @@ void handle_test(char* name, int (*func)())
    }
 }
 
+// Runs IO segment tests
 int main(int argc, char *argv[])
 {
    printf("Starting Tests\n");
