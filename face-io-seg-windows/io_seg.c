@@ -1,58 +1,39 @@
-#include "config_parser.h"
-#include "face_common.h"
-#include "face_ios.h"
-#include "face_messages.h"
-#include "globals.h"
-#include <string.h>
-#include <stdlib.h>
+#include "io_seg.h"
 #include <stdio.h>
-#include "utildefs.h"
-
-#define IO_SEG_TESTING
-
-#pragma comment(lib,"Ws2_32.lib")  // Yes, it's just that easy to get posix sockets in Windows!
-
 
 #define MAX_CONNECTION_DATA 10
 
-static FACE_CONFIG_DATA_TYPE  configData[MAX_CONNECTION_DATA];
+#define IO_SEG_TESTING
 
-// Number of Configured conectionData
+// Board configuration data
+static FACE_CONFIG_DATA_TYPE  configData[MAX_CONNECTION_DATA];
 static uint32_t numconectionData = 0;
 CEI_INT16 board;         // board device number
 CEI_INT16 num_xmtrs;     // number of transmitters purchased
 CEI_INT16 num_rcvrs;     // number of receivers purchased
 
-static void error_exit(CEI_INT16 board,CEI_INT16 status)
-{
-   // display the error message
-   printf("Error while testing board %d:\n",board);
-   printf("  Error reported:  \'%s\'\n",ar_get_error(status));
-   printf("  Additional info: \'%s\'\n",ar_get_error(ARS_LAST_ERROR));
-
-   // prompt the user to hit return
-   printf("\nPress <Enter> to exit...\n");
-   getchar();
-
-   // terminate the application
-   exit(0);
-}
-
 void IO_Seg_Initialize
    ( /* in */ const FACE_CONGIGURATION_FILE_NAME configuration_file,
    /* out */ FACE_RETURN_CODE_TYPE *return_code)
 {
-   _Bool success = PasrseConfigFile(configuration_file + 1, configData, &numconectionData);
    CEI_INT16 status;        // API status value
 
-   if(success)
+   printf("  In IO Seg Read.\n");
+
+   if(PasrseConfigFile(configuration_file + 1, configData, &numconectionData))
    {
       board = 0;
 
       // load the board (address, port, and size are not used - must specify zero)
       status = ar_loadslv(board,0,0,0);
       if (status != ARS_NORMAL)
-         error_exit(board,status);
+      {
+         printf("  Error while testing board %d:\n",board);
+         printf("  Error reported:  \'%s\'\n",ar_get_error(status));
+         printf("  Additional info: \'%s\'\n",ar_get_error(ARS_LAST_ERROR));
+         *return_code = FACE_NOT_AVAILABLE;
+         return;
+      }
 
       // display the board type
       printf("  %s detected ",ar_get_boardname(board,NULL));
@@ -125,7 +106,6 @@ void IO_Seg_Write
 
       printf("  Need to write channel %d with a %d.\n", channel, state);
 
-
       discrete_reg = ar_get_config(board,ARU_DISCRETE_OUTPUTS);
 
       printf("  Current discrete output values (reg = 0x%4X):\n",discrete_reg);
@@ -135,16 +115,21 @@ void IO_Seg_Write
       else
          discrete_reg &= ~(1 <<(channel - 1));
 
+      status = ar_set_config(board,ARU_DISCRETE_OUTPUTS,discrete_reg);
 
       // set the discrete output value
-      status = ar_set_config(board,ARU_DISCRETE_OUTPUTS,discrete_reg);
-      if (status != ARS_NORMAL)
-         error_exit(board,status);
-
-      // update the display
-      printf("  Discrete output reg has been set to 0x%4X.\n",discrete_reg & 0xFFFF);
-
-      *return_code = FACE_NO_ERROR;
+      if (status == ARS_NORMAL)
+      {
+         printf("  Discrete output reg has been set to 0x%4X.\n",discrete_reg & 0xFFFF);
+         *return_code = FACE_NO_ERROR;
+      }
+      else
+      {
+         printf("  Error setting discrete output on board %d:\n",board);
+         printf("  Error reported:  \'%s\'\n",ar_get_error(status));
+         printf("  Additional info: \'%s\'\n",ar_get_error(ARS_LAST_ERROR));
+         *return_code = FACE_NOT_AVAILABLE;
+      }
    }
    else
    {
@@ -427,7 +412,7 @@ int TEST_FACE_IO_READ_INTERACTIVE()
    IO_Seg_Read(&message_length, rxFaceMsg, &retCode);
    oldstate = state = FaceDiscreteState(rxFaceMsg);
 
-   printf ("  Read state:%d on channel:%d.\n", state, channel);
+   printf("  Read state:%d on channel:%d.\n", state, channel);
 
    printf("  Toggle dipswitch 1 and press [ENTER] to continue.");
    fflush( stdin );
@@ -441,51 +426,34 @@ int TEST_FACE_IO_READ_INTERACTIVE()
 
 int TEST_FACE_IO_WRITE_INTERACTIVE()
 {
-   FACE_RETURN_CODE_TYPE retCode = FACE_NO_ERROR;
-   FACE_MESSAGE_LENGTH_TYPE message_length;
-   CEI_INT32 discrete_reg_old, discrete_reg_new;
-   uint8_t channel = 1;
    char c;
+   _Bool success;
 
-   char txBuff[1024];
-
-   FACE_IO_MESSAGE_TYPE * txFaceMsg = (FACE_IO_MESSAGE_TYPE *)txBuff;
-
-   txFaceMsg->guid = htonl(100);
-   txFaceMsg->busType = FACE_DISCRETE;
-   txFaceMsg->message_type = htons(FACE_DATA);
-   FaceSetPayLoadLength(txFaceMsg, 4);
-
-   message_length = FACE_MSG_HEADER_SIZE + 4;
-
-   discrete_reg_old = ar_get_config(board,ARU_DISCRETE_OUTPUTS);
-
-   FaceSetDiscreteChannelNumber(txFaceMsg,channel);
-   FaceSetDiscreteState(txFaceMsg, 0);
+   TEST_FACE_IO_OPEN();
 
    printf("  Turning on LED...\n");
 
-   IO_Seg_Write(message_length, txFaceMsg, &retCode);
+   success = TEST_FACE_IO_WRITE_ON();
 
    printf("  Is the LED on? (y/n)\n");
    fflush( stdin );
    c = getchar();
-   if(c == 'n')
+   if(c == 'n' || !success)
       return 0;
 
    printf("  Turning off LED...\n");
+   
+   success = TEST_FACE_IO_WRITE_OFF();
 
-   FaceSetDiscreteState(txFaceMsg, 1);
-   IO_Seg_Write(message_length, txFaceMsg, &retCode);
    printf("  Is the LED off? (y/n)\n");
    fflush( stdin );
    c = getchar();
-   if(c == 'n')
+   if(c == 'n' || !success)
       return 0;
 
-   discrete_reg_new = ar_get_config(board,ARU_DISCRETE_OUTPUTS);
+   TEST_FACE_IO_CLOSE();
 
-   return (retCode == FACE_NO_ERROR);
+   return success;
 }
 
 void handle_test(char* name, int (*func)())
@@ -509,7 +477,7 @@ int main(int argc, char *argv[])
    printf("Unit Tests\n");
    printf("--------------\n\n");
 
-   handle_test("Init - Config file invalid", TEST_IO_SEG_INIT_INVALID_FILE);
+   handle_test("Init - Handle bad config file", TEST_IO_SEG_INIT_INVALID_FILE);
    handle_test("Init - Config file valid", TEST_IO_SEG_INIT_GOOD);
 
    handle_test("Read - Unimplemented bus type", TEST_IO_SEG_READ_BAD_BUSTYPE);

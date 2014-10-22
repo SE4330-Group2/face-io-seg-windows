@@ -1,3 +1,10 @@
+//face-io-lib
+#include <config_parser.h>
+#include <face_messages.h>
+
+//ARINC Board
+#include "utildefs.h"
+
 // For when PSS and I/O Seg are in the same program and I/O Lib calls I/O Lib 
 void IO_Seg_Initialize
 ( /* in */ const FACE_CONGIGURATION_FILE_NAME configuration_file,
