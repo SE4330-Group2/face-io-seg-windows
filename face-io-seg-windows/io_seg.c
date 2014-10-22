@@ -9,11 +9,7 @@
 #include "utildefs.h"
 
 #define IO_SEG_TESTING
-#ifdef IO_SEG_TESTING
-   #include <Windows.h>
-#endif
 
-#include <winsock2.h>
 #pragma comment(lib,"Ws2_32.lib")  // Yes, it's just that easy to get posix sockets in Windows!
 
 
