@@ -15,6 +15,9 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
+    <Xml Include="config.xml" />
+  </ItemGroup>
+  <ItemGroup>
     <ClCompile Include="io_seg.c">
       <Filter>Source Files</Filter>
     </ClCompile>

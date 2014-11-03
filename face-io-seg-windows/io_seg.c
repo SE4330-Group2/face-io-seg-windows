@@ -16,6 +16,10 @@ static FACE_CONFIG_DATA_TYPE  configData[MAX_CONNECTION_DATA];
 static uint32_t numconectionData = 0;
 static CEI_INT16 board;         // board device number
 
+IO_Seg_Initialize_PtrType IO_Seg_Initialize_Ptr = IO_Seg_Initialize;
+IO_Seg_Read_PtrType IO_Seg_Read_Ptr = IO_Seg_Read;
+IO_Seg_Write_PtrType IO_Seg_Write_Ptr = IO_Seg_Write;
+
 //---------------------------------------------------------------------------
 // IO_Seg_Initialize is used to initialize the hardware.
 // This method reads an XML config file and sets hardware accordingly.

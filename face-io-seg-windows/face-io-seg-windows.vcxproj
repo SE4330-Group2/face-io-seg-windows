@@ -11,9 +11,9 @@
     </ProjectConfiguration>
   </ItemGroup>
   <PropertyGroup Label="Globals">
-    <ProjectGuid>{4CC239B9-357E-43F4-AAED-1A30AE6EFFBB}</ProjectGuid>
+    <ProjectGuid>{BE04AC2C-F292-4B27-9CC0-9910EAE1D376}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
-    <RootNamespace>faceiosegwindows</RootNamespace>
+    <RootNamespace>faceiosegwindows2</RootNamespace>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
@@ -54,12 +54,12 @@
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <SDLCheck>true</SDLCheck>
-      <AdditionalIncludeDirectories>S:\Courses\CSSE\clifton\se4330\bre_cal_jak\face-io-lib\face-io-lib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>S:\Courses\CSSE\clifton\se4330\bre_cal_jak\PR3_bre_cal_jak\face-io-lib\face-io-lib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>A429</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>A429;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>cei22032.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
@@ -82,6 +82,9 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <Xml Include="config.xml" />
+  </ItemGroup>
+  <ItemGroup>
     <ClCompile Include="io_seg.c" />
   </ItemGroup>
   <ItemGroup>
@@ -89,7 +92,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\face-io-lib\face-io-lib\face-io-lib.vcxproj">
-      <Project>{6a977ca5-5bb7-49f2-a054-c5409c4b53f5}</Project>
+      <Project>{75bc4ea6-d056-4d9b-a824-1bb1ed50adfb}</Project>
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
