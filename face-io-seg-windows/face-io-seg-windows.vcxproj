@@ -86,9 +86,13 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="io_seg.c" />
+    <ClCompile Include="queue.c" />
+    <ClCompile Include="windows_wrappers.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="io_seg.h" />
+    <ClInclude Include="queue.h" />
+    <ClInclude Include="windows_wrappers.h" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\face-io-lib\face-io-lib\face-io-lib.vcxproj">

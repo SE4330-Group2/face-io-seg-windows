@@ -1,24 +1,129 @@
 //---------------------------------------------------------------------------
-// Prototype 2
+// Prototype 3
 // This is the c file for io_seg.h which will be used by the I/O library
 // when it needs to access hardware.
 //---------------------------------------------------------------------------
 
 #include "io_seg.h"
 #include <stdio.h>
+#include <Windows.h>
+#include <process.h>
+#include "queue.h"
 
 #define MAX_CONNECTION_DATA 10
 
 #define IO_SEG_TESTING
 
+typedef struct
+{
+   FACE_CONFIG_DATA_TYPE  info;
+   QUEUE                     q;
+} A429_CONNECTION;
+
 // Board configuration data
 static FACE_CONFIG_DATA_TYPE  configData[MAX_CONNECTION_DATA];
 static uint32_t numconectionData = 0;
 static CEI_INT16 board;         // board device number
+uint32_t numQueue;
+A429_CONNECTION connectionQueues[MAX_CONNECTION_DATA];
 
 IO_Seg_Initialize_PtrType IO_Seg_Initialize_Ptr = IO_Seg_Initialize;
 IO_Seg_Read_PtrType IO_Seg_Read_Ptr = IO_Seg_Read;
 IO_Seg_Write_PtrType IO_Seg_Write_Ptr = IO_Seg_Write;
+
+void A429_Handler( void * ignored )
+{
+   uint32_t i;
+   while(1)
+   {
+      for(i = 0; i < numQueue; i++)
+      {
+         //connectionQueues[i].info = NULL;
+      }
+      // printf("FOOOOOOOOOOOOOOOOOOOOO");
+   }
+}
+
+void HandlePhysicalConnection()
+{
+
+}
+
+void HandleLogicalConection()
+{
+
+}
+
+FACE_RETURN_CODE_TYPE Discrete_Read(FACE_IO_MESSAGE_TYPE * faceMsg)
+{
+   uint8_t bitVal = 0;
+   CEI_INT32 discrete_reg;
+
+   uint8_t channel = FaceDiscreteChannelNumber(faceMsg);
+   printf("  Reading from channel %d.\n", channel);
+
+   // read the discrete input values
+   discrete_reg = ar_get_config(board,ARU_DISCRETE_INPUTS);
+
+   printf("  Current discrete input values (reg = 0x%4X):\n",discrete_reg);
+
+   bitVal = (discrete_reg >> (channel - 1)) & 1;
+
+   printf("  Going to return a %d\n", bitVal);
+   FaceSetDiscreteState(faceMsg, bitVal);
+   return FACE_NO_ERROR;
+}
+
+FACE_RETURN_CODE_TYPE A429_Read(FACE_IO_MESSAGE_TYPE * faceMsg)
+{
+
+
+   return FACE_NO_ERROR;
+}
+
+FACE_RETURN_CODE_TYPE Discrete_Write(FACE_IO_MESSAGE_TYPE * faceMsg)
+{
+   CEI_INT32 discrete_reg;  // used to read/write discretes
+   CEI_INT16 status;        // API status value
+   uint8_t channel = FaceDiscreteChannelNumber(faceMsg);
+   uint8_t state = FaceDiscreteState(faceMsg);
+
+   printf("  Need to write channel %d with a %d.\n", channel, state);
+
+   discrete_reg = ar_get_config(board,ARU_DISCRETE_OUTPUTS);
+
+   printf("  Current discrete output values (reg = 0x%4X):\n",discrete_reg);
+
+   discrete_reg = state ? discrete_reg |   1 << (channel - 1)
+      : discrete_reg & ~(1 << (channel - 1));
+
+   status = ar_set_config(board,ARU_DISCRETE_OUTPUTS,discrete_reg);
+
+   // set the discrete output value
+   if (status == ARS_NORMAL)
+   {
+      printf("  Discrete output reg has been set to 0x%4X.\n",discrete_reg & 0xFFFF);
+      return FACE_NO_ERROR;
+   }
+   else
+   {
+      printf("  Error setting discrete output on board %d:\n",board);
+      printf("  Error reported:  \'%s\'\n",ar_get_error(status));
+      printf("  Additional info: \'%s\'\n",ar_get_error(ARS_LAST_ERROR));
+      return FACE_NOT_AVAILABLE;
+   }
+}
+
+FACE_RETURN_CODE_TYPE A429_Write(FACE_IO_MESSAGE_TYPE * faceMsg)
+{
+   // write a word out the transmitter
+
+   //status = ar_putword(board,tx,xmit_word);
+
+   //if (status != ARS_NORMAL)
+   //   *return_code = FACE_NOT_AVAILABLE; //TODO: More descriptive error code
+   return FACE_NO_ERROR;
+}
 
 //---------------------------------------------------------------------------
 // IO_Seg_Initialize is used to initialize the hardware.
@@ -33,6 +138,8 @@ void IO_Seg_Initialize
    CEI_INT16 status;        // API status value
    CEI_INT16 num_xmtrs;     // number of transmitters purchased
    CEI_INT16 num_rcvrs;     // number of receivers purchased
+   uint32_t i;
+   numQueue = 0;
 
    printf("  In IO Seg Read.\n");
 
@@ -58,6 +165,23 @@ void IO_Seg_Initialize
       num_rcvrs = ar_num_rchans(board);
       printf("supporting %d transmitters and %d receivers.\n",num_xmtrs,num_rcvrs);
 
+      for( i = 0; i < numconectionData; i++ )
+      {
+         if(configData[i].busType == FACE_ARINC_429)
+         {
+            A429_CONNECTION connection;
+            connection.info = configData[i];
+            queue_init(&connection.q);
+            connectionQueues[numQueue] = connection;
+            numQueue++;
+         }
+      }
+
+      _beginthread( A429_Handler, 0, NULL );
+      //while(1)
+      //{
+      //   printf("Baaaaaaaaar");
+      //}
       *return_code = FACE_NO_ERROR;
    }
    else
@@ -80,28 +204,16 @@ void IO_Seg_Read
    /* in */ FACE_MESSAGE_ADDR_TYPE data_buffer_address,
    /* out */ FACE_RETURN_CODE_TYPE *return_code)
 {
-   uint8_t bitVal = 0;
-   uint8_t channel;
-   CEI_INT32 discrete_reg;  // used to read discretes
-
    FACE_IO_MESSAGE_TYPE * faceMsg = (FACE_IO_MESSAGE_TYPE *)data_buffer_address;
    printf("  In IO Seg Read.\n");
 
    if (faceMsg->busType == FACE_DISCRETE)
    {
-      channel = FaceDiscreteChannelNumber(faceMsg);
-      printf("  Reading from channel %d.\n", channel);
-
-      // read the discrete input values
-      discrete_reg = ar_get_config(board,ARU_DISCRETE_INPUTS);
-
-      printf("  Current discrete input values (reg = 0x%4X):\n",discrete_reg);
-
-      bitVal = (discrete_reg >> (channel - 1)) & 1;
-
-      printf("  Going to return a %d\n", bitVal);
-      FaceSetDiscreteState(faceMsg, bitVal);
-      *return_code = FACE_NO_ERROR;
+      *return_code = Discrete_Read(faceMsg);
+   }
+   else if (faceMsg->busType == FACE_ARINC_429)
+   {
+      *return_code = A429_Read(faceMsg);
    }
    else
    {
@@ -123,40 +235,15 @@ void IO_Seg_Write
    /* out */ FACE_RETURN_CODE_TYPE *return_code)
 {
    FACE_IO_MESSAGE_TYPE * faceMsg = (FACE_IO_MESSAGE_TYPE *)data_buffer_address;
-
    printf("  In IO Seg Write.\n");
+
    if (faceMsg->busType == FACE_DISCRETE)
    {
-      CEI_INT16 status;        // API status value
-      CEI_INT32 discrete_reg;  // used to read/write discretes
-
-      uint8_t channel = FaceDiscreteChannelNumber(faceMsg);
-      uint8_t state = FaceDiscreteState(faceMsg);
-
-      printf("  Need to write channel %d with a %d.\n", channel, state);
-
-      discrete_reg = ar_get_config(board,ARU_DISCRETE_OUTPUTS);
-
-      printf("  Current discrete output values (reg = 0x%4X):\n",discrete_reg);
-
-      discrete_reg = state ? discrete_reg |   1 << (channel - 1)
-                           : discrete_reg & ~(1 << (channel - 1));
-
-      status = ar_set_config(board,ARU_DISCRETE_OUTPUTS,discrete_reg);
-
-      // set the discrete output value
-      if (status == ARS_NORMAL)
-      {
-         printf("  Discrete output reg has been set to 0x%4X.\n",discrete_reg & 0xFFFF);
-         *return_code = FACE_NO_ERROR;
-      }
-      else
-      {
-         printf("  Error setting discrete output on board %d:\n",board);
-         printf("  Error reported:  \'%s\'\n",ar_get_error(status));
-         printf("  Additional info: \'%s\'\n",ar_get_error(ARS_LAST_ERROR));
-         *return_code = FACE_NOT_AVAILABLE;
-      }
+      *return_code = Discrete_Write(faceMsg);
+   }
+   else if (faceMsg->busType == FACE_ARINC_429)
+   {
+      *return_code = A429_Write(faceMsg);
    }
    else
    {
