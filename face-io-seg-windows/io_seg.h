@@ -7,9 +7,6 @@
 #include <config_parser.h>
 #include <face_messages.h>
 #include <direct_call.h>
-#include "windows_wrappers.h"
-//ARINC Board
-#include "utildefs.h"
 
 //---------------------------------------------------------------------------
 // IO_Seg_Initialize is used to initialize the hardware.

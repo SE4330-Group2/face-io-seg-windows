@@ -6,7 +6,7 @@ void queue_init(QUEUE *q)
    q->rear = 0;
 }
 
-void queue_add(QUEUE *q, int x)
+void queue_add(QUEUE *q, uint32_t x)
 {
    if(!queue_full(q))
    {
@@ -15,9 +15,9 @@ void queue_add(QUEUE *q, int x)
    }
 }
 
-int queue_remove(QUEUE *q)
+uint32_t queue_remove(QUEUE *q)
 {
-   int x = -1;
+   uint32_t x = -1;
    if(!queue_empty(q))
    {
       x = q->items[q->front];
@@ -26,12 +26,12 @@ int queue_remove(QUEUE *q)
    return x;
 }
 
-int queue_full(QUEUE *q)
+uint32_t queue_full(QUEUE *q)
 {
    return (q->rear + 1) % MAXQUEUE == q->front;
 }
 
-int queue_empty(QUEUE *q)
+uint32_t queue_empty(QUEUE *q)
 {
    return q->rear == q->front;
 }
