@@ -52,20 +52,39 @@ IO_Seg_Initialize_PtrType IO_Seg_Initialize_Ptr = IO_Seg_Initialize;
 IO_Seg_Read_PtrType IO_Seg_Read_Ptr = IO_Seg_Read;
 IO_Seg_Write_PtrType IO_Seg_Write_Ptr = IO_Seg_Write;
 
+
+void error_exit(CEI_INT16 board,CEI_INT16 status)
+{
+   // display the error message
+   printf("Error while testing board %d:\n",board);
+   printf("  Error reported:  \'%s\'\n",ar_get_error(status));
+   printf("  Additional info: \'%s\'\n",ar_get_error(ARS_LAST_ERROR));
+
+   // prompt the user to hit return
+   printf("\nPress <Enter> to exit...\n");
+   getchar();
+
+   // terminate the application
+   exit(0);
+}
+
 // 
 static void A429_Handler( void * ignored )
 {
    uint32_t i;
    while(1)
    {
+
       for(i = 0; i < numQueue; i++)
       {
          if(connectionQueues[i].info.connectionType == FACE_DIRECT_CONNECTION)
          {
+            //printf("Physical %d", numQueue);
             HandlePhysicalConnection(&connectionQueues[i]);
          }
          else
          {
+            printf("Logical");
             HandleLogicalConection(&connectionQueues[i]);
          }
       }
@@ -150,6 +169,7 @@ static void HandlePhysicalConnection(A429_CONNECTION * connection)
    {
       CEI_INT32 rcv_word = 0;
       CEI_INT16 ret_code = ar_getword(board, connection->info.channel, &rcv_word);
+      printf("In HandlePhysicalConnection Receive");
       if(ret_code != ARS_NODATA)
       {
          queue_add(&connection->q, rcv_word);
@@ -231,7 +251,7 @@ static void unpack_words_into_queue(FACE_A429_MESSAGE_TYPE * A429Data, QUEUE * q
    uint16_t i;
    for(i = 0; i < A429Data->num_labels; i++)
    {
-      queue_add(queue, A429Data->data[i]);
+      queue_add(queue, ntohl(A429Data->data[i]));
    }
 }
 
@@ -300,18 +320,14 @@ void IO_Seg_Initialize
 
    if(PasrseConfigFile(configuration_file + 1, configData, &numconectionData))
    {
+      printf("  Successfully parsed config file, found %d connections\n",numconectionData);
+
       board = 0;
 
       // load the board (address, port, and size are not used - must specify zero)
       status = ar_loadslv(board,0,0,0);
       if (status != ARS_NORMAL)
-      {
-         printf("  Error while testing board %d:\n",board);
-         printf("  Error reported:  \'%s\'\n",ar_get_error(status));
-         printf("  Additional info: \'%s\'\n",ar_get_error(ARS_LAST_ERROR));
-         *return_code = FACE_NOT_AVAILABLE;
-         return;
-      }
+         error_exit(board,status);
 
       printf("  %s detected ",ar_get_boardname(board,NULL));
 
@@ -329,11 +345,39 @@ void IO_Seg_Initialize
             connection.handle = (FACE_INTERFACE_HANDLE_TYPE)(((long)i) + 1);
             queue_init(&connection.q);
             connectionQueues[numQueue] = connection;
+
+            if(connection.info.direction == FACE_TRANSMIT)
+            {
+               status = ar_set_config(board, (CEI_INT16)(ARU_TX_CH01_BIT_RATE + connection.info.channel), connection.info.a429Speed);
+
+            }
+            else if (connection.info.direction == FACE_RECEIVE)
+            {
+               status = ar_set_config(board, (CEI_INT16)(ARU_RX_CH01_BIT_RATE + connection.info.channel), connection.info.a429Speed);
+            }
+            else
+               printf("Unable to init");
+
+            if (status != ARS_NORMAL)
+               error_exit(board,status);
+
             numQueue++;
          }
       }
 
-      //_beginthread( A429_Handler, 0, NULL );
+      // launch the board
+      status = ar_go(board);
+      if (status != ARS_NORMAL)
+         error_exit(board,status);
+
+      for(i = 0; i < MAX_CONNECTION_DATA; i++)
+      {
+         status = ar_set_config(board, (CEI_INT16)(ARU_TX_CH01_BIT_RATE + connectionQueues[i].info.channel), connectionQueues[i].info.a429Speed);
+         if (status != ARS_NORMAL)
+            error_exit(board,status);
+      }
+
+      _beginthread( A429_Handler, 0, NULL );
 
       *return_code = FACE_NO_ERROR;
    }
@@ -736,6 +780,42 @@ _Bool TEST_FACE_IO_CLOSE()
    return (retCode1 == FACE_NO_ERROR) && (retCode2 == FACE_NO_ERROR);
 }
 
+_Bool TEST_A429_HARDWARE_RW_GOOD()
+{
+   CEI_INT16 status;        // library status value
+   CEI_INT32 xmit_word = 0x12345678;     // word sent out the transmitter
+   CEI_INT32 recv_word;     // stores received word
+
+   // Turn on wrapping for test
+   status = ar_set_config(board,ARU_INTERNAL_WRAP,AR_WRAP_ON);
+   if (status != ARS_NORMAL)
+      return FALSE;
+
+   printf("  Writing %d to the board\n", xmit_word);
+
+   // write a word out the transmitter
+   status = ar_putword(board,1,xmit_word);
+   if (status != ARS_NORMAL)
+      return FALSE;
+
+   printf("  Attempting to recieve a word\n", xmit_word);
+
+   // attempt to receive a word
+   status = ar_getword(board,1,&recv_word);
+   if (status != ARS_GOTDATA)
+      return FALSE;
+
+   printf("  Read %d from the board\n", recv_word);
+
+   // Turn off wrapping, done testing
+   status = ar_set_config(board,ARU_INTERNAL_WRAP,AR_WRAP_OFF);
+   if (status != ARS_NORMAL)
+      return FALSE;
+
+   return xmit_word == recv_word;
+}
+
+
 _Bool TEST_FACE_IO_A429_RW_GOOD()
 {
    FACE_RETURN_CODE_TYPE retCode;
@@ -747,11 +827,18 @@ _Bool TEST_FACE_IO_A429_RW_GOOD()
    static uint32_t dummyData2 = 0x98765432;  // Not a valid Arinc - I am just testing
    char txBuff[MAX_BUFF_SIZE];
    char rxBuff[MAX_BUFF_SIZE];
+   CEI_INT16 status;        // API status value
+
+
 
    FACE_IO_MESSAGE_TYPE * txFaceMsg = (FACE_IO_MESSAGE_TYPE *)txBuff;
    FACE_IO_MESSAGE_TYPE * rxFaceMsg = (FACE_IO_MESSAGE_TYPE *)rxBuff;
    FACE_A429_MESSAGE_TYPE * txA429Data = (FACE_A429_MESSAGE_TYPE *)txFaceMsg->data;
    FACE_A429_MESSAGE_TYPE * rxA429Data = (FACE_A429_MESSAGE_TYPE *)rxFaceMsg->data;
+
+   status = ar_set_config(board,ARU_INTERNAL_WRAP,AR_WRAP_ON);
+   if (status != ARS_NORMAL)
+      error_exit(board,status);
 
    // Zero them out
    memset(txBuff, 0, MAX_BUFF_SIZE);
@@ -790,6 +877,11 @@ _Bool TEST_FACE_IO_A429_RW_GOOD()
       printf ("I/O API Test bed - IO Seg just read DataLog no error.  length: %d. First A429 Word was: %0X.\n", rxA429Data->num_labels, ntohl(rxA429Data->data[0]));
    else
       printf ("I/O API Test bed - IO Seg just read DataLog with error: %d.\n", retCode);
+
+   status = ar_set_config(board,ARU_INTERNAL_WRAP,AR_WRAP_OFF);
+   if (status != ARS_NORMAL)
+      error_exit(board,status);
+
 }
 
 // This is an interactive test that will prompt the user to toggle the 
@@ -908,6 +1000,8 @@ int main(int argc, char *argv[])
 
    printf("A429\n");
    printf("----\n\n");
+
+   handle_test("R/W - A429 Hardware successful", TEST_A429_HARDWARE_RW_GOOD);
 
    //handle_test("Write - Successful", TEST_IO_SEG_WRITE_A429);
 
