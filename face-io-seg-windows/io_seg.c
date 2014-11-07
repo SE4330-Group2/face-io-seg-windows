@@ -98,7 +98,7 @@ static void HandleLogicalConection(A429_CONNECTION * connection)
          unpack_words_into_queue(rxA429Data, &connection->q);
       }
       //else
-       //  printf ("I/O API Test bed - IO Seg just read DataLog with error: %d.\n", retCode);
+      //  printf ("I/O API Test bed - IO Seg just read DataLog with error: %d.\n", retCode);
    }
    else if(connection->info.direction == FACE_RECEIVE)
    {
@@ -136,11 +136,14 @@ static void HandlePhysicalConnection(A429_CONNECTION * connection)
    if(connection->info.direction == FACE_TRANSMIT) //TODO: And channel is free
    {
       CEI_INT16 ret_code = 0;
-      uint32_t xmit_word = queue_remove(&connection->q);
-      ret_code = ar_putword(board, connection->info.channel, xmit_word);
-      if(ret_code != ARS_NORMAL) // ARS_XMITOVRFLO
+      if(!queue_empty(&connection->q))
       {
-         printf ("Failed to do ARINC putword. Returned: %d\n", ret_code);
+         uint32_t xmit_word = queue_remove(&connection->q);
+         ret_code = ar_putword(board, connection->info.channel, xmit_word);
+         if(ret_code != ARS_NORMAL) // ARS_XMITOVRFLO
+         {
+            printf ("Failed to do ARINC putword. Returned: %d\n", ret_code);
+         }
       }
    }
    else if(connection->info.direction == FACE_RECEIVE) //TODO: And word available on the channel
@@ -330,7 +333,7 @@ void IO_Seg_Initialize
          }
       }
 
-      _beginthread( A429_Handler, 0, NULL );
+      //_beginthread( A429_Handler, 0, NULL );
 
       *return_code = FACE_NO_ERROR;
    }
@@ -452,57 +455,74 @@ _Bool TEST_IO_SEG_READ_GOOD()
    IO_Seg_Read(&message_length, rxFaceMsg, &retCode);
    return retCode == FACE_NO_ERROR;
 }
+
 /*
 // Returns true when read is successful
 _Bool TEST_IO_SEG_WRITE_A429()
 {
-   FACE_RETURN_CODE_TYPE retCode = FACE_NO_ERROR;
-   FACE_MESSAGE_LENGTH_TYPE message_length;
-   CEI_INT32 discrete_reg_old, discrete_reg_new;
-   uint8_t channel = 1;
-   uint8_t state = 0;
+static uint32_t dummyData1 = 0x12345678;  // Not a valid Arinc - I am just testing
+static uint32_t dummyData2 = 0x98765432;  // Not a valid Arinc - I am just testing
 
-   char txBuff[1024];
+// Send a IGS Message
+FaceSetPayLoadLength(txFaceMsg,sizeof(FACE_A429_MESSAGE_TYPE) + 4);  // Send two words
+txA429Data->channel = (uint8_t)(configData[igsIndex].channel);
+txA429Data->num_labels = 2;
+txA429Data->data[0] = htonl(dummyData1++);
+txA429Data->data[1] = htonl(dummyData2++);
+FACE_IO_Write(igsHandle, 0, FACE_MSG_HEADER_SIZE + FacePayLoadLength(txFaceMsg), txFaceMsg, &retCode);
+if (retCode == FACE_NO_ERROR)
+printf ("I/O API Test bed - IO Seg just wrote IGS with no error.\n");
+else
+printf ("I/O API Test bed - IO Seg just wrote IGS with error: %d.\n", retCode);
 
-   FACE_IO_MESSAGE_TYPE * txFaceMsg = (FACE_IO_MESSAGE_TYPE *)txBuff;
 
-   txFaceMsg->guid = htonl(100);
-   txFaceMsg->busType = FACE_DISCRETE;
-   txFaceMsg->message_type = htons(FACE_DATA);
-   FaceSetPayLoadLength(txFaceMsg, 4);
+FACE_RETURN_CODE_TYPE retCode = FACE_NO_ERROR;
+FACE_MESSAGE_LENGTH_TYPE message_length;
+CEI_INT32 discrete_reg_old, discrete_reg_new;
+uint8_t channel = 1;
+uint8_t state = 0;
 
-   message_length = FACE_MSG_HEADER_SIZE + 4;
+char txBuff[1024];
 
-   discrete_reg_old = ar_get_config(board,ARU_DISCRETE_OUTPUTS);
+FACE_IO_MESSAGE_TYPE * txFaceMsg = (FACE_IO_MESSAGE_TYPE *)txBuff;
 
-   FaceSetDiscreteChannelNumber(txFaceMsg,channel);
-   FaceSetDiscreteState(txFaceMsg, state);
-   IO_Seg_Write(message_length, txFaceMsg, &retCode);
+txFaceMsg->guid = htonl(100);
+txFaceMsg->busType = FACE_DISCRETE;
+txFaceMsg->message_type = htons(FACE_DATA);
+FaceSetPayLoadLength(txFaceMsg, 4);
 
-   discrete_reg_new = ar_get_config(board,ARU_DISCRETE_OUTPUTS);
+message_length = FACE_MSG_HEADER_SIZE + 4;
 
-   return retCode == FACE_NO_ERROR;
+discrete_reg_old = ar_get_config(board,ARU_DISCRETE_OUTPUTS);
+
+FaceSetDiscreteChannelNumber(txFaceMsg,channel);
+FaceSetDiscreteState(txFaceMsg, state);
+IO_Seg_Write(message_length, txFaceMsg, &retCode);
+
+discrete_reg_new = ar_get_config(board,ARU_DISCRETE_OUTPUTS);
+
+return retCode == FACE_NO_ERROR;
 }
 
 // Returns true when read is successful
 _Bool TEST_IO_SEG_READ_A429()
 {
-   FACE_RETURN_CODE_TYPE retCode;
-   FACE_MESSAGE_LENGTH_TYPE message_length;
+FACE_RETURN_CODE_TYPE retCode;
+FACE_MESSAGE_LENGTH_TYPE message_length;
 
-   char rxBuff[1024];
+char rxBuff[1024];
 
-   FACE_IO_MESSAGE_TYPE * rxFaceMsg = (FACE_IO_MESSAGE_TYPE *)rxBuff;
+FACE_IO_MESSAGE_TYPE * rxFaceMsg = (FACE_IO_MESSAGE_TYPE *)rxBuff;
 
-   rxFaceMsg->guid = htonl(200);
-   rxFaceMsg->busType = FACE_ARINC_429;
-   rxFaceMsg->message_type = htons(FACE_DATA);
-   FaceSetPayLoadLength(rxFaceMsg, 4);
+rxFaceMsg->guid = htonl(200);
+rxFaceMsg->busType = FACE_ARINC_429;
+rxFaceMsg->message_type = htons(FACE_DATA);
+FaceSetPayLoadLength(rxFaceMsg, 4);
 
-   message_length = FACE_MSG_HEADER_SIZE + 4;
-   FaceSetDiscreteChannelNumber(rxFaceMsg, 1);
-   IO_Seg_Read(&message_length, rxFaceMsg, &retCode);
-   return retCode == FACE_NO_ERROR;
+message_length = FACE_MSG_HEADER_SIZE + 4;
+FaceSetDiscreteChannelNumber(rxFaceMsg, 1);
+IO_Seg_Read(&message_length, rxFaceMsg, &retCode);
+return retCode == FACE_NO_ERROR;
 }*/
 
 // Returns true when a non-implemented bus type is detected
@@ -716,6 +736,62 @@ _Bool TEST_FACE_IO_CLOSE()
    return (retCode1 == FACE_NO_ERROR) && (retCode2 == FACE_NO_ERROR);
 }
 
+_Bool TEST_FACE_IO_A429_RW_GOOD()
+{
+   FACE_RETURN_CODE_TYPE retCode;
+   FACE_INTERFACE_HANDLE_TYPE dataLogHandle;
+   FACE_INTERFACE_HANDLE_TYPE igsHandle;
+
+   FACE_MESSAGE_LENGTH_TYPE messLen;
+   static uint32_t dummyData1 = 0x12345678;  // Not a valid Arinc - I am just testing
+   static uint32_t dummyData2 = 0x98765432;  // Not a valid Arinc - I am just testing
+   char txBuff[MAX_BUFF_SIZE];
+   char rxBuff[MAX_BUFF_SIZE];
+
+   FACE_IO_MESSAGE_TYPE * txFaceMsg = (FACE_IO_MESSAGE_TYPE *)txBuff;
+   FACE_IO_MESSAGE_TYPE * rxFaceMsg = (FACE_IO_MESSAGE_TYPE *)rxBuff;
+   FACE_A429_MESSAGE_TYPE * txA429Data = (FACE_A429_MESSAGE_TYPE *)txFaceMsg->data;
+   FACE_A429_MESSAGE_TYPE * rxA429Data = (FACE_A429_MESSAGE_TYPE *)rxFaceMsg->data;
+
+   // Zero them out
+   memset(txBuff, 0, MAX_BUFF_SIZE);
+   memset(rxBuff, 0, MAX_BUFF_SIZE);
+
+   // Set the fixed fields - make sure to convert to network order when needed
+   txFaceMsg->guid = htonl(100);
+   rxFaceMsg->guid = htonl(200);   // Pick a couple of numbers
+   txFaceMsg->busType =  FACE_ARINC_429;
+   rxFaceMsg->busType = FACE_ARINC_429;
+   txFaceMsg->message_type = htons(FACE_DATA);
+   rxFaceMsg->message_type = htons(FACE_DATA);
+
+   // Open the connections.
+   FACE_IO_Open("A429_TX_DATALOGGER", &dataLogHandle, &retCode);
+   printf("I/O API - Return codes for Open are datalogger %d ", retCode);
+   FACE_IO_Open("A429_RX_ALTIMETER", &igsHandle, &retCode);
+   printf("IGS %d\n", retCode);
+
+   // Send a IGS Message
+   FaceSetPayLoadLength(txFaceMsg,sizeof(FACE_A429_MESSAGE_TYPE) + 4);  // Send two words
+   txA429Data->channel = 1;
+   txA429Data->num_labels = 2;
+   txA429Data->data[0] = htonl(dummyData1++);
+   txA429Data->data[1] = htonl(dummyData2++);
+   FACE_IO_Write(igsHandle, 5000000000LL, FACE_MSG_HEADER_SIZE + FacePayLoadLength(txFaceMsg), txFaceMsg, &retCode);
+   if (retCode == FACE_NO_ERROR)
+      printf ("I/O API Test bed - IO Seg just wrote IGS with no error.\n");
+   else
+      printf ("I/O API Test bed - IO Seg just wrote IGS with error: %d.\n", retCode);
+
+   // Read the Data Logger Message
+   messLen = FACE_MSG_HEADER_SIZE + sizeof(FACE_A429_MESSAGE_TYPE);
+   FACE_IO_Read(dataLogHandle, 5000000000LL, &messLen, rxFaceMsg, &retCode);   // Give it time for other side to send
+   if (retCode == FACE_NO_ERROR)
+      printf ("I/O API Test bed - IO Seg just read DataLog no error.  length: %d. First A429 Word was: %0X.\n", rxA429Data->num_labels, ntohl(rxA429Data->data[0]));
+   else
+      printf ("I/O API Test bed - IO Seg just read DataLog with error: %d.\n", retCode);
+}
+
 // This is an interactive test that will prompt the user to toggle the 
 // DIP switch before continuing.  The test is successful if the state
 // change is detected.
@@ -821,7 +897,7 @@ int main(int argc, char *argv[])
 
    printf("Discrete\n");
    printf("--------\n\n");
-   
+
    handle_test("Read - Unimplemented bus type", TEST_IO_SEG_READ_BAD_BUSTYPE);
    handle_test("Read - Successful", TEST_IO_SEG_READ_GOOD);
 
@@ -833,13 +909,18 @@ int main(int argc, char *argv[])
    printf("A429\n");
    printf("----\n\n");
 
-   //handle_test("Read - Unimplemented bus type", TEST_IO_SEG_READ_A429);
+   //handle_test("Write - Successful", TEST_IO_SEG_WRITE_A429);
+
+   //handle_test("Read - Successful", TEST_IO_SEG_READ_A429);
 
 
    printf("Unit Tests Complete\n\n\n");
 
    printf("Integration Tests\n");
    printf("-----------------\n\n");
+
+   printf("Discrete\n");
+   printf("--------\n\n");
 
    handle_test("FACE_IO Init - Success", TEST_FACE_IO_INITIALIZE);
    handle_test("FACE_IO Open - Success", TEST_FACE_IO_OPEN);
@@ -848,14 +929,19 @@ int main(int argc, char *argv[])
    handle_test("FACE_IO Read - Success", TEST_FACE_IO_READ);
    handle_test("FACE_IO Close - Success", TEST_FACE_IO_CLOSE);
 
+   printf("A429\n");
+   printf("----\n\n");
+
+   handle_test("FACE_IO A429 Read/Write - Success", TEST_FACE_IO_A429_RW_GOOD);
+
    printf("Integration Tests Complete\n\n\n");
 
    printf("Interactive Tests\n");
    printf("-----------------\n\n");
 
-   handle_test("FACE_IO Write Interactive", TEST_FACE_IO_READ_INTERACTIVE);
+   //handle_test("FACE_IO Write Interactive", TEST_FACE_IO_READ_INTERACTIVE);
 
-   handle_test("FACE_IO Write Interactive", TEST_FACE_IO_WRITE_INTERACTIVE);
+   //handle_test("FACE_IO Write Interactive", TEST_FACE_IO_WRITE_INTERACTIVE);
 
    printf("Interactive Tests Complete\n\n\n");
 
