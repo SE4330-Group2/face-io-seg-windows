@@ -1,6 +1,6 @@
 #include <stdint.h>
 
-#define MAXQUEUE       100
+#define MAXQUEUE       200
 
 typedef struct {
         uint32_t items[MAXQUEUE];		/* body of queue */

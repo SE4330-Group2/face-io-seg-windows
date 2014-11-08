@@ -2,11 +2,11 @@
 <!-- Connection 1 -->
 <connection>
 <name>A429_TX_DATALOGGER</name>
-<type>UDP</type>
+<type>Direct API</type>
 <direction>TRANSMIT</direction>
 <refreshperiod>1000000000</refreshperiod>
 <sourceaddress></sourceaddress>
-<destinationaddress>137.104.21.4</destinationaddress>
+<destinationaddress>127.0.0.1</destinationaddress>
 <sourceport></sourceport>
 <destinationport>7080</destinationport>
 <iotype>A429</iotype>
@@ -16,35 +16,20 @@
 </connection>
 <!-- Connection 2 -->
 <connection>
-<name>A429_RX_ALTIMETER</name>
-<type>UDP</type>
+<name>A429_RX_IGS</name>
+<type>Direct API</type>
 <direction>RECEIVE</direction>
 <refreshperiod>1000000000</refreshperiod>
-<sourceaddress>137.104.21.4</sourceaddress>
-<destinationaddress></destinationaddress>
-<sourceport>7081</sourceport>
-<destinationport></destinationport>
+<sourceaddress></sourceaddress>
+<destinationaddress>127.0.0.1</destinationaddress>
+<sourceport></sourceport>
+<destinationport>7081</destinationport>
 <iotype>A429</iotype>
-<channel>3</channel>
+<channel>1</channel>
 <a429_parity>ODD</a429_parity>
 <a429_speed>HIGH</a429_speed>
 </connection>
 <!-- Connection 3 -->
-<connection>
-<name>A429_RX_SPEED</name>
-<type>UDP</type>
-<direction>RECEIVE</direction>
-<refreshperiod>1000000000</refreshperiod>
-<sourceaddress>137.104.21.4</sourceaddress>
-<destinationaddress></destinationaddress>
-<sourceport>7082</sourceport>
-<destinationport></destinationport>
-<iotype>A429</iotype>
-<channel>5</channel>
-<a429_parity>ODD</a429_parity>
-<a429_speed>HIGH</a429_speed>
-</connection>
-<!-- Connection 4 -->
 <connection>
 <name>DISCRETE_INPUT_WOW</name>
 <type>Direct API</type>
@@ -57,7 +42,7 @@
 <iotype>DISCRETE</iotype>
 <channel>1</channel>
 </connection>
-<!-- Connection 5 -->
+<!-- Connection 4 -->
 <connection>
 <name>DISCRETE_OUTPUT_EMERGENCY</name>
 <type>Direct API</type>
