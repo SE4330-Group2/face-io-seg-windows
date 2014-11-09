@@ -35,16 +35,16 @@ typedef struct
 } A429_CONNECTION;
 
 // Internal methods
-void A429_Handler( void * ignored );
-static void HandleLogicalConection(A429_CONNECTION * connection);
-static void HandlePhysicalConnection(A429_CONNECTION * connection);
-static FACE_RETURN_CODE_TYPE Discrete_Read(FACE_IO_MESSAGE_TYPE * faceMsg);
-static A429_CONNECTION * GetConnectionByChannel(uint8_t channel, FACE_DIRECTIONALTY_TYPE direction);
-static FACE_RETURN_CODE_TYPE A429_Read(FACE_IO_MESSAGE_TYPE * faceMsg);
+void a429_handler( void * ignored );
+static void handle_logical_connection(A429_CONNECTION * connection);
+static void handle_physical_connection(A429_CONNECTION * connection);
+static FACE_RETURN_CODE_TYPE discrete_read(FACE_IO_MESSAGE_TYPE * faceMsg);
+static A429_CONNECTION * get_connection_by_channel(uint8_t channel, FACE_DIRECTIONALTY_TYPE direction);
+static FACE_RETURN_CODE_TYPE a429_read(FACE_IO_MESSAGE_TYPE * faceMsg);
 static void package_queue_contents(FACE_A429_MESSAGE_TYPE * A429Data, QUEUE * queue);
 static void unpack_words_into_queue(FACE_A429_MESSAGE_TYPE * A429Data, QUEUE * queue);
-static FACE_RETURN_CODE_TYPE Discrete_Write(FACE_IO_MESSAGE_TYPE * faceMsg);
-static FACE_RETURN_CODE_TYPE A429_Write(FACE_IO_MESSAGE_TYPE * faceMsg);
+static FACE_RETURN_CODE_TYPE discrete_write(FACE_IO_MESSAGE_TYPE * faceMsg);
+static FACE_RETURN_CODE_TYPE a429_write(FACE_IO_MESSAGE_TYPE * faceMsg);
 
 // Board configuration data
 static FACE_CONFIG_DATA_TYPE  configData[MAX_CONNECTION_DATA];
@@ -57,7 +57,11 @@ IO_Seg_Initialize_PtrType IO_Seg_Initialize_Ptr = IO_Seg_Initialize;
 IO_Seg_Read_PtrType IO_Seg_Read_Ptr = IO_Seg_Read;
 IO_Seg_Write_PtrType IO_Seg_Write_Ptr = IO_Seg_Write;
 
-
+//---------------------------------------------------------------------------
+// error_exit is used to return and write errors.
+// This method is called if an error occured and prints out the error,
+// the associated id and allows user to exit program.
+//---------------------------------------------------------------------------
 void error_exit(CEI_INT16 board,CEI_INT16 status)
 {
    // display the error message
@@ -73,8 +77,12 @@ void error_exit(CEI_INT16 board,CEI_INT16 status)
    exit(0);
 }
 
-// 
-static void A429_Handler( void * ignored )
+//---------------------------------------------------------------------------
+// a429_handler is used to run the physical and logical connections.
+// This method runs constantly and handles all of the a429 connections both
+// physical and logical.
+//---------------------------------------------------------------------------
+static void a429_handler( void * ignored )
 {
    uint32_t i;
    while(1)
@@ -83,18 +91,21 @@ static void A429_Handler( void * ignored )
       {
          if(connectionQueues[i].info.connectionType == FACE_DIRECT_CONNECTION)
          {
-            HandlePhysicalConnection(&connectionQueues[i]);
+            handle_physical_connection(&connectionQueues[i]);
          }
          else if(connectionQueues[i].info.connectionType == FACE_UDP_CONNECTION)
          {
-            HandleLogicalConection(&connectionQueues[i]);
+            handle_logical_connection(&connectionQueues[i]);
          }
       }
    }
 }
 
-// 
-static void HandleLogicalConection(A429_CONNECTION * connection)
+//---------------------------------------------------------------------------
+// handle_logical_connection is used to handle logical a429 connections.
+// This method puts and gets a429 words for the thread and updates queues.
+//---------------------------------------------------------------------------
+static void handle_logical_connection(A429_CONNECTION * connection)
 {
    FACE_RETURN_CODE_TYPE retCode;
    FACE_MESSAGE_LENGTH_TYPE message_length;
@@ -170,8 +181,11 @@ static void HandleLogicalConection(A429_CONNECTION * connection)
       printf ("Doing nothing for FACE_DIRECTIONALTY_TYPE: %d\n", connection->info.direction);
 }
 
-// 
-static void HandlePhysicalConnection(A429_CONNECTION * connection)
+//---------------------------------------------------------------------------
+// handle_physical_connection is used to handle physical a429 connections.
+// This method puts and gets a429 words for the thread and updates queues.
+//---------------------------------------------------------------------------
+static void handle_physical_connection(A429_CONNECTION * connection)
 {
    if(connection->info.direction == FACE_TRANSMIT) //TODO: And channel is free
    {
@@ -190,7 +204,6 @@ static void HandlePhysicalConnection(A429_CONNECTION * connection)
    {
       CEI_INT32 rcv_word = 0;
       CEI_INT16 ret_code = ar_getword(board, connection->info.channel, &rcv_word);
-      //printf("In HandlePhysicalConnection Receive");
       if(ret_code != ARS_NODATA)
       {
          queue_add(&connection->q, rcv_word);
@@ -202,8 +215,12 @@ static void HandlePhysicalConnection(A429_CONNECTION * connection)
    }
 }
 
-// 
-static FACE_RETURN_CODE_TYPE Discrete_Read(FACE_IO_MESSAGE_TYPE * faceMsg)
+//---------------------------------------------------------------------------
+// discrete_read is used to read a state from the hardware.
+// This method reads the discrete channel and puts the state into the
+// face message.
+//---------------------------------------------------------------------------
+static FACE_RETURN_CODE_TYPE discrete_read(FACE_IO_MESSAGE_TYPE * faceMsg)
 {
    uint8_t bitVal = 0;
    CEI_INT32 discrete_reg;
@@ -223,8 +240,12 @@ static FACE_RETURN_CODE_TYPE Discrete_Read(FACE_IO_MESSAGE_TYPE * faceMsg)
    return FACE_NO_ERROR;
 }
 
-// 
-static A429_CONNECTION * GetConnectionByChannel(uint8_t channel, FACE_DIRECTIONALTY_TYPE direction)
+//---------------------------------------------------------------------------
+// get_connection_by_channel is used to get a specific connection.
+// This method uses the channel and its direction in order to find the
+// proper a429 connection.
+//---------------------------------------------------------------------------
+static A429_CONNECTION * get_connection_by_channel(uint8_t channel, FACE_DIRECTIONALTY_TYPE direction)
 {
    int i;
 
@@ -238,11 +259,15 @@ static A429_CONNECTION * GetConnectionByChannel(uint8_t channel, FACE_DIRECTIONA
    return NULL;
 }
 
-// 
-static FACE_RETURN_CODE_TYPE A429_Read(FACE_IO_MESSAGE_TYPE * faceMsg)
+//---------------------------------------------------------------------------
+// a429_read is used to read information from A429 hardware channel.
+// This method takes the information in the connection queue and packages
+// it into the face message.
+//---------------------------------------------------------------------------
+static FACE_RETURN_CODE_TYPE a429_read(FACE_IO_MESSAGE_TYPE * faceMsg)
 {
    FACE_A429_MESSAGE_TYPE * txA429Data = (FACE_A429_MESSAGE_TYPE *)faceMsg->data;
-   A429_CONNECTION * connection = GetConnectionByChannel(txA429Data->channel, FACE_RECEIVE);
+   A429_CONNECTION * connection = get_connection_by_channel(txA429Data->channel, FACE_RECEIVE);
 
    if(connection!=NULL)
    {
@@ -255,7 +280,11 @@ static FACE_RETURN_CODE_TYPE A429_Read(FACE_IO_MESSAGE_TYPE * faceMsg)
    return FACE_INVALID_CONFIG;
 }
 
-// 
+//---------------------------------------------------------------------------
+// package_queue_contents is used to retrieve a429 words from queues.
+// This method takes all of the information in the connection's queue and
+// places them into the a429_message.
+//---------------------------------------------------------------------------
 static void package_queue_contents(FACE_A429_MESSAGE_TYPE * A429Data, QUEUE * queue)
 {
    uint16_t i = 0;
@@ -266,7 +295,11 @@ static void package_queue_contents(FACE_A429_MESSAGE_TYPE * A429Data, QUEUE * qu
    A429Data->num_labels = i;
 }
 
-// 
+//---------------------------------------------------------------------------
+// unpack_words_into_queue is used to put a429 words into queues.
+// This method takes the words from the a429_message and places them into
+// the appropriate connection's queue.
+//---------------------------------------------------------------------------
 static void unpack_words_into_queue(FACE_A429_MESSAGE_TYPE * A429Data, QUEUE * queue)
 {
    uint16_t i;
@@ -276,8 +309,12 @@ static void unpack_words_into_queue(FACE_A429_MESSAGE_TYPE * A429Data, QUEUE * q
    }
 }
 
-// 
-static FACE_RETURN_CODE_TYPE Discrete_Write(FACE_IO_MESSAGE_TYPE * faceMsg)
+//---------------------------------------------------------------------------
+// discrete_write is used to write a state to hardware.
+// This method takes the discrete state in the face message and write it to 
+// the appropriate channel.
+//---------------------------------------------------------------------------
+static FACE_RETURN_CODE_TYPE discrete_write(FACE_IO_MESSAGE_TYPE * faceMsg)
 {
    CEI_INT32 discrete_reg;  // used to read/write discretes
    CEI_INT16 status;        // API status value
@@ -310,11 +347,15 @@ static FACE_RETURN_CODE_TYPE Discrete_Write(FACE_IO_MESSAGE_TYPE * faceMsg)
    }
 }
 
-// 
-static FACE_RETURN_CODE_TYPE A429_Write(FACE_IO_MESSAGE_TYPE * faceMsg)
+//---------------------------------------------------------------------------
+// a429_write is used to write information to A429 hardware channel.
+// This method takes the information in the face message and unpacks it into
+// the appropriate queue to be written to hardware.
+//---------------------------------------------------------------------------
+static FACE_RETURN_CODE_TYPE a429_write(FACE_IO_MESSAGE_TYPE * faceMsg)
 {
    FACE_A429_MESSAGE_TYPE * A429Data = (FACE_A429_MESSAGE_TYPE *)faceMsg->data;
-   A429_CONNECTION * connection = GetConnectionByChannel(A429Data->channel, FACE_TRANSMIT);
+   A429_CONNECTION * connection = get_connection_by_channel(A429Data->channel, FACE_TRANSMIT);
 
    if(connection != NULL)
       unpack_words_into_queue(A429Data, &connection->q);
@@ -392,7 +433,7 @@ void IO_Seg_Initialize
       if (status != ARS_NORMAL)
          error_exit(board,status);
 
-      _beginthread( A429_Handler, 0, NULL );
+      _beginthread( a429_handler, 0, NULL );
 
       *return_code = FACE_NO_ERROR;
    }
@@ -407,9 +448,9 @@ void IO_Seg_Initialize
 // IO_Seg_Read is used to read the hardware.
 // This method retrieves the channel number and bus type from the location
 // specified by the data buffer address. 
-// After reading this information, this method retrieves the value from the
-// hardware and copies it to the memory location specified by the data 
-// buffer address.
+// After reading this information, this method calls the appropriate bus type 
+// then retrieves the value from the hardware and copies it to the memory 
+// location specified by the data buffer address.
 //---------------------------------------------------------------------------
 void IO_Seg_Read
    ( /* inout */ FACE_MESSAGE_LENGTH_TYPE *message_length,
@@ -421,11 +462,11 @@ void IO_Seg_Read
 
    if (faceMsg->busType == FACE_DISCRETE)
    {
-      *return_code = Discrete_Read(faceMsg);
+      *return_code = discrete_read(faceMsg);
    }
    else if (faceMsg->busType == FACE_ARINC_429)
    {
-      *return_code = A429_Read(faceMsg);
+      *return_code = a429_read(faceMsg);
    }
    else
    {
@@ -438,8 +479,8 @@ void IO_Seg_Read
 // IO_Seg_Write is used to write to the hardware.
 // This method retrieves the channel number, bus type, and desired state
 // from the location specified by the data buffer address. 
-// After reading this information, this method writes the desired state 
-// to the hardware.
+// After reading this information, this method writes the desired information
+// to the appropriate bus type.
 //---------------------------------------------------------------------------
 void IO_Seg_Write
    (  /* in */ FACE_MESSAGE_LENGTH_TYPE message_length,
@@ -451,11 +492,11 @@ void IO_Seg_Write
 
    if (faceMsg->busType == FACE_DISCRETE)
    {
-      *return_code = Discrete_Write(faceMsg);
+      *return_code = discrete_write(faceMsg);
    }
    else if (faceMsg->busType == FACE_ARINC_429)
    {
-      *return_code = A429_Write(faceMsg);
+      *return_code = a429_write(faceMsg);
    }
    else
    {
