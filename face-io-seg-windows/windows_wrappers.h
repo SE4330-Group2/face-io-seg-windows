@@ -6,6 +6,7 @@
 #include <windef.h>
 #endif
 
+//#include <WinSock2.h>
 
 /*
  * Generic handle type - intended to extend uniqueness beyond
@@ -21,5 +22,7 @@
 //typedef struct pthread_attr_t_ * pthread_attr_t;
 
 int clock_gettime(int X, struct timeval *tv);
+
+int timeval_subtract(struct timeval *result, struct timeval *x, struct timeval *y);
 
 //LARGE_INTEGER getFILETIMEoffset();
