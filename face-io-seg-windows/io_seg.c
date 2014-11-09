@@ -22,6 +22,8 @@
 #define IO_SEG_TESTING
 #define FACE_READ_TIMEOUT 5000000000LL
 
+#define CONVERT_TO_MICRO 1000
+
 #define IO_SEG_GUID 42
 
 typedef struct
@@ -29,6 +31,7 @@ typedef struct
    FACE_CONFIG_DATA_TYPE      info;
    QUEUE                      q;
    FACE_INTERFACE_HANDLE_TYPE handle;
+   struct timeval             lastUDPWrite;
 } A429_CONNECTION;
 
 // Internal methods
@@ -76,7 +79,6 @@ static void A429_Handler( void * ignored )
    uint32_t i;
    while(1)
    {
-
       for(i = 0; i < numQueue; i++)
       {
          if(connectionQueues[i].info.connectionType == FACE_DIRECT_CONNECTION)
@@ -121,29 +123,48 @@ static void HandleLogicalConection(A429_CONNECTION * connection)
    }
    else if(connection->info.direction == FACE_RECEIVE)
    {
-      //Get all Arinc Words from appropriate Queue
+      struct timeval currentTime, result;
+      int x;
+      uint64_t res;
+      x = 0;
+      clock_gettime(x, &currentTime);
+      timeval_subtract(&result, &currentTime, &connection->lastUDPWrite);
+      res = (result.tv_sec * CONVERT_TO_MICRO * CONVERT_TO_MICRO) + result.tv_usec;
+      if(res > connection->info.refreshPeriod / CONVERT_TO_MICRO)
+      {
+         //Get all Arinc Words from appropriate Queue
 
-      char txBuff[MAX_BUFF_SIZE];
+         char txBuff[MAX_BUFF_SIZE];
 
-      FACE_IO_MESSAGE_TYPE * txFaceMsg = (FACE_IO_MESSAGE_TYPE *)txBuff;
-      FACE_A429_MESSAGE_TYPE * txA429Data = (FACE_A429_MESSAGE_TYPE *)txFaceMsg->data;
+         LONG64 uptime;
 
-      // Zero them out
-      memset(txBuff, 0, MAX_BUFF_SIZE);
+         FACE_IO_MESSAGE_TYPE * txFaceMsg = (FACE_IO_MESSAGE_TYPE *)txBuff;
+         FACE_A429_MESSAGE_TYPE * txA429Data = (FACE_A429_MESSAGE_TYPE *)txFaceMsg->data;
 
-      // Set the fixed fields - make sure to convert to network order when needed
-      txFaceMsg->guid = htonl(IO_SEG_GUID);
-      txFaceMsg->busType =  connection->info.busType;
-      txFaceMsg->message_type = htons(FACE_DATA);
+         connection->lastUDPWrite = currentTime;
 
-      // Send a IGS Message
-      txA429Data->channel = (uint8_t)(connection->info.channel);
+         // Zero them out
+         memset(txBuff, 0, MAX_BUFF_SIZE);
 
-      package_queue_contents(txA429Data, &connection->q);
+         // Set the fixed fields - make sure to convert to network order when needed
+         txFaceMsg->guid = htonl(IO_SEG_GUID);
+         txFaceMsg->busType =  connection->info.busType;
+         txFaceMsg->message_type = htons(FACE_DATA);
 
-      FaceSetPayLoadLength(txFaceMsg, sizeof(FACE_A429_MESSAGE_TYPE) + (2 * txA429Data->num_labels));
+         uptime = ar_get_timercnt(board) * 5 * CONVERT_TO_MICRO * CONVERT_TO_MICRO;
+         txFaceMsg->timestamp_LSW = uptime;
+         txFaceMsg->timestamp_MSW = uptime >> 32;
 
-      FACE_IO_Write(connection->handle, 0, FACE_MSG_HEADER_SIZE + FacePayLoadLength(txFaceMsg), txFaceMsg, &retCode);
+         // Send a IGS Message
+         txA429Data->channel = (uint8_t)(connection->info.channel);
+
+         package_queue_contents(txA429Data, &connection->q);
+
+         FaceSetPayLoadLength(txFaceMsg, sizeof(FACE_A429_MESSAGE_TYPE) + (2 * txA429Data->num_labels));
+
+         FACE_IO_Write(connection->handle, 0, FACE_MSG_HEADER_SIZE + FacePayLoadLength(txFaceMsg), txFaceMsg, &retCode);
+      }
+
    }
    else
       printf ("Doing nothing for FACE_DIRECTIONALTY_TYPE: %d\n", connection->info.direction);
@@ -315,7 +336,6 @@ void IO_Seg_Initialize
    CEI_INT16 status;        // API status value
    CEI_INT16 num_xmtrs;     // number of transmitters purchased
    CEI_INT16 num_rcvrs;     // number of receivers purchased
-   CEI_INT32 val;
    uint32_t i;
    numQueue = 0;
 
