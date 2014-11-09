@@ -606,6 +606,52 @@ _Bool TEST_IO_SEG_WRITE_CHANNELS_PRESERVED()
    return (discrete_reg_old & ~(1<<(channel-1))) == (discrete_reg_new & ~(1<<(channel-1)));
 }
 
+
+_Bool TEST_QUEUE_BURNS_SLOT()
+{
+   QUEUE q;
+   int i = 0;
+   queue_init(&q);
+
+
+   while(!queue_full(&q))
+      queue_add(&q, i++);
+
+   printf("  Number of items in queue: %d", i);
+
+   return TRUE;
+}
+
+_Bool TEST_QUEUE_CONTENTS()
+{
+   QUEUE q;
+   int i = 0;
+   int j = 0;
+   queue_init(&q);
+
+
+   while(!queue_full(&q))
+      queue_add(&q, i++);
+
+   while(!queue_empty(&q))
+   {
+      queue_remove(&q);
+      j++;
+   }
+
+   return i == j;
+}
+
+_Bool TEST_NEW_QUEUE_IS_EMPTY()
+{
+   QUEUE q;
+   int i = 0;
+   queue_init(&q);
+
+   return queue_empty(&q) && !queue_full(&q);
+}
+
+
 // Returns true when FACE_IO_Initialize is successful
 _Bool TEST_FACE_IO_INITIALIZE()
 {
@@ -988,6 +1034,12 @@ int main(int argc, char *argv[])
 
    //handle_test("Read - Successful", TEST_IO_SEG_READ_A429);
 
+   printf("Queue\n");
+   printf("--------\n\n");
+
+   handle_test("Burns slot", TEST_QUEUE_BURNS_SLOT);
+   handle_test("New queue is empty", TEST_NEW_QUEUE_IS_EMPTY);
+   handle_test("Can remove all contents", TEST_QUEUE_CONTENTS);
 
    printf("Unit Tests Complete\n\n\n");
 
@@ -996,6 +1048,7 @@ int main(int argc, char *argv[])
 
    printf("Discrete\n");
    printf("--------\n\n");
+
 
    handle_test("FACE_IO Init - Success", TEST_FACE_IO_INITIALIZE);
    handle_test("FACE_IO Open - Success", TEST_FACE_IO_OPEN);
