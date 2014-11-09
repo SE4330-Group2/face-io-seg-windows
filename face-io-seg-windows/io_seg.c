@@ -26,12 +26,13 @@
 
 #define IO_SEG_GUID 42
 
+// Contains the information for a429 connections
 typedef struct
 {
-   FACE_CONFIG_DATA_TYPE      info;
-   QUEUE                      q;
-   FACE_INTERFACE_HANDLE_TYPE handle;
-   struct timeval             lastUDPWrite;
+   FACE_CONFIG_DATA_TYPE*      info;
+   QUEUE                       q;
+   FACE_INTERFACE_HANDLE_TYPE  handle;
+   struct timeval              lastUDPWrite;
 } A429_CONNECTION;
 
 // Internal methods
@@ -89,11 +90,11 @@ static void a429_handler( void * ignored )
    {
       for(i = 0; i < numQueue; i++)
       {
-         if(connectionQueues[i].info.connectionType == FACE_DIRECT_CONNECTION)
+         if(connectionQueues[i].info->connectionType == FACE_DIRECT_CONNECTION)
          {
             handle_physical_connection(&connectionQueues[i]);
          }
-         else if(connectionQueues[i].info.connectionType == FACE_UDP_CONNECTION)
+         else if(connectionQueues[i].info->connectionType == FACE_UDP_CONNECTION)
          {
             handle_logical_connection(&connectionQueues[i]);
          }
@@ -109,7 +110,7 @@ static void handle_logical_connection(A429_CONNECTION * connection)
 {
    FACE_RETURN_CODE_TYPE retCode;
    FACE_MESSAGE_LENGTH_TYPE message_length;
-   if(connection->info.direction == FACE_TRANSMIT)
+   if(connection->info->direction == FACE_TRANSMIT)
    {
       char rxBuff[MAX_BUFF_SIZE];
 
@@ -120,7 +121,7 @@ static void handle_logical_connection(A429_CONNECTION * connection)
       memset(rxBuff, 0, MAX_BUFF_SIZE);
 
       rxFaceMsg->guid = htonl(IO_SEG_GUID);
-      rxFaceMsg->busType = connection->info.busType;
+      rxFaceMsg->busType = connection->info->busType;
       rxFaceMsg->message_type = htons(FACE_DATA);
 
       message_length = FACE_MSG_HEADER_SIZE + sizeof(FACE_A429_MESSAGE_TYPE);
@@ -132,7 +133,7 @@ static void handle_logical_connection(A429_CONNECTION * connection)
       //else
       //  printf ("I/O API Test bed - IO Seg just read DataLog with error: %d.\n", retCode);
    }
-   else if(connection->info.direction == FACE_RECEIVE)
+   else if(connection->info->direction == FACE_RECEIVE)
    {
       struct timeval currentTime, result;
       int x;
@@ -141,7 +142,7 @@ static void handle_logical_connection(A429_CONNECTION * connection)
       clock_gettime(x, &currentTime);
       timeval_subtract(&result, &currentTime, &connection->lastUDPWrite);
       res = (result.tv_sec * CONVERT_TO_MICRO * CONVERT_TO_MICRO) + result.tv_usec;
-      if(res > connection->info.refreshPeriod / CONVERT_TO_MICRO)
+      if(res > connection->info->refreshPeriod / CONVERT_TO_MICRO)
       {
          //Get all Arinc Words from appropriate Queue
 
@@ -159,15 +160,15 @@ static void handle_logical_connection(A429_CONNECTION * connection)
 
          // Set the fixed fields - make sure to convert to network order when needed
          txFaceMsg->guid = htonl(IO_SEG_GUID);
-         txFaceMsg->busType =  connection->info.busType;
+         txFaceMsg->busType =  connection->info->busType;
          txFaceMsg->message_type = htons(FACE_DATA);
 
          uptime = ar_get_timercnt(board) * 5 * CONVERT_TO_MICRO * CONVERT_TO_MICRO;
-         txFaceMsg->timestamp_LSW = uptime;
+         txFaceMsg->timestamp_LSW = (uint32_t)uptime;
          txFaceMsg->timestamp_MSW = uptime >> 32;
 
          // Send a IGS Message
-         txA429Data->channel = (uint8_t)(connection->info.channel);
+         txA429Data->channel = (uint8_t)(connection->info->channel);
 
          package_queue_contents(txA429Data, &connection->q);
 
@@ -178,7 +179,7 @@ static void handle_logical_connection(A429_CONNECTION * connection)
 
    }
    else
-      printf ("Doing nothing for FACE_DIRECTIONALTY_TYPE: %d\n", connection->info.direction);
+      printf ("Doing nothing for FACE_DIRECTIONALTY_TYPE: %d\n", connection->info->direction);
 }
 
 //---------------------------------------------------------------------------
@@ -187,23 +188,23 @@ static void handle_logical_connection(A429_CONNECTION * connection)
 //---------------------------------------------------------------------------
 static void handle_physical_connection(A429_CONNECTION * connection)
 {
-   if(connection->info.direction == FACE_TRANSMIT) //TODO: And channel is free
+   if(connection->info->direction == FACE_TRANSMIT)
    {
       CEI_INT16 ret_code = 0;
       if(!queue_empty(&connection->q))
       {
          uint32_t xmit_word = queue_remove(&connection->q);
-         ret_code = ar_putword(board, connection->info.channel, xmit_word);
+         ret_code = ar_putword(board, connection->info->channel, xmit_word);
          if(ret_code != ARS_NORMAL) // ARS_XMITOVRFLO
          {
             printf ("Failed to do ARINC putword. Returned: %d\n", ret_code);
          }
       }
    }
-   else if(connection->info.direction == FACE_RECEIVE) //TODO: And word available on the channel
+   else if(connection->info->direction == FACE_RECEIVE)
    {
       CEI_INT32 rcv_word = 0;
-      CEI_INT16 ret_code = ar_getword(board, connection->info.channel, &rcv_word);
+      CEI_INT16 ret_code = ar_getword(board, connection->info->channel, &rcv_word);
       if(ret_code != ARS_NODATA)
       {
          queue_add(&connection->q, rcv_word);
@@ -251,7 +252,7 @@ static A429_CONNECTION * get_connection_by_channel(uint8_t channel, FACE_DIRECTI
 
    for(i = 0; i < MAX_CONNECTION_DATA; i++)
    {
-      if(connectionQueues[i].info.channel == channel && connectionQueues[i].info.direction == direction)
+      if(connectionQueues[i].info->channel == channel && connectionQueues[i].info->direction == direction)
       {
          return (connectionQueues + i); //return reference to element in array.
       }
@@ -405,18 +406,18 @@ void IO_Seg_Initialize
          if(configData[i].busType == FACE_ARINC_429)
          {
             A429_CONNECTION connection;
-            connection.info = configData[i];
+            connection.info = &configData[i];
             connection.handle = (FACE_INTERFACE_HANDLE_TYPE)(((long)i) + 1);
             queue_init(&connection.q);
             connectionQueues[numQueue] = connection;
 
-            if(connection.info.direction == FACE_TRANSMIT)
+            if(connection.info->direction == FACE_TRANSMIT)
             {
-               status = ar_set_config(board, (CEI_INT16)(ARU_TX_CH01_BIT_RATE + connection.info.channel - 1), connection.info.a429Speed);
+               status = ar_set_config(board, (CEI_INT16)(ARU_TX_CH01_BIT_RATE + connection.info->channel - 1), connection.info->a429Speed);
             }
-            else if (connection.info.direction == FACE_RECEIVE)
+            else if (connection.info->direction == FACE_RECEIVE)
             {
-               status = ar_set_config(board, (CEI_INT16)(ARU_RX_CH01_BIT_RATE + connection.info.channel - 1), connection.info.a429Speed);
+               status = ar_set_config(board, (CEI_INT16)(ARU_RX_CH01_BIT_RATE + connection.info->channel - 1), connection.info->a429Speed);
             }
             else
                printf("Unable to init");
@@ -667,7 +668,7 @@ _Bool TEST_IO_SEG_WRITE_CHANNELS_PRESERVED()
    return (discrete_reg_old & ~(1<<(channel-1))) == (discrete_reg_new & ~(1<<(channel-1)));
 }
 
-
+// Returns true if full is one less the size of the queue
 _Bool TEST_QUEUE_BURNS_SLOT()
 {
    QUEUE q;
@@ -678,11 +679,13 @@ _Bool TEST_QUEUE_BURNS_SLOT()
    while(!queue_full(&q))
       queue_add(&q, i++);
 
-   printf("  Number of items in queue: %d", i);
+   printf("  Number of items in queue: %d\n", i);
 
-   return TRUE;
+   return i = MAXQUEUE - 1;
 }
 
+// Returns true if the amount read information from the
+// queue is the same as the ammount put into it
 _Bool TEST_QUEUE_CONTENTS()
 {
    QUEUE q;
@@ -703,6 +706,7 @@ _Bool TEST_QUEUE_CONTENTS()
    return i == j;
 }
 
+// Returns true when a new queue is empty
 _Bool TEST_NEW_QUEUE_IS_EMPTY()
 {
    QUEUE q;
@@ -711,7 +715,6 @@ _Bool TEST_NEW_QUEUE_IS_EMPTY()
 
    return queue_empty(&q) && !queue_full(&q);
 }
-
 
 // Returns true when FACE_IO_Initialize is successful
 _Bool TEST_FACE_IO_INITIALIZE()
@@ -813,6 +816,8 @@ _Bool TEST_FACE_IO_CLOSE()
    return (retCode1 == FACE_NO_ERROR) && (retCode2 == FACE_NO_ERROR);
 }
 
+// Returns true if ar_putword is able to put a word to the hardware
+// and ar_getword gets the same word back
 _Bool TEST_A429_HARDWARE_RW_GOOD()
 {
    CEI_INT16 status;        // library status value
@@ -848,7 +853,8 @@ _Bool TEST_A429_HARDWARE_RW_GOOD()
    return xmit_word == recv_word;
 }
 
-
+// Returns true if the FACE_IO_WRITE successfully writes a word to
+// the board and FACE_IO_READ gets the same word back
 _Bool TEST_FACE_IO_A429_RW_GOOD()
 {
    FACE_RETURN_CODE_TYPE retCode;
@@ -921,6 +927,7 @@ _Bool TEST_FACE_IO_A429_RW_GOOD()
    return ntohl(rxA429Data->data[0]) == dummyData1;
 }
 
+// Returns true if the FACE_IO_READ is unable to get any input
 _Bool TEST_FACE_IO_A429_READ_NOTHING()
 {
    FACE_RETURN_CODE_TYPE retCode;
@@ -1089,14 +1096,10 @@ int main(int argc, char *argv[])
    printf("A429\n");
    printf("----\n\n");
 
-   //handle_test("R/W - A429 Hardware successful", TEST_A429_HARDWARE_RW_GOOD);
-
-   //handle_test("Write - Successful", TEST_IO_SEG_WRITE_A429);
-
-   //handle_test("Read - Successful", TEST_IO_SEG_READ_A429);
+   handle_test("R/W - A429 Hardware successful", TEST_A429_HARDWARE_RW_GOOD);
 
    printf("Queue\n");
-   printf("--------\n\n");
+   printf("-----\n\n");
 
    handle_test("Burns slot", TEST_QUEUE_BURNS_SLOT);
    handle_test("New queue is empty", TEST_NEW_QUEUE_IS_EMPTY);
